@@ -1,5 +1,5 @@
 # 🧊 HybridLog
-HybridLog is a high-performance, minimalist fitness tracker designed for the sophisticated athlete. It combines high-density information architecture with a tactile "Lego Video Game" aesthetic to turn every workout into a building block for your future self.
+HybridLog is a high-performance, minimalist fitness tracker designed for the sophisticated athlete. It combines high-density information architecture with a tactile aesthetic to turn every workout into a building block for your future self.
 
 ---
 
