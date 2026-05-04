@@ -1,0 +1,38 @@
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.buildDir = "../build"
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+    
+    afterEvaluate { project ->
+        if (project.hasProperty('android')) {
+            // THE FIX: Force all libraries to use API 35 to support Android 14+ widget interactivity
+            project.android {
+                compileSdkVersion 35
+                buildToolsVersion "35.0.0"
+                
+                // Keep our namespace fix from before
+                if (namespace == null) {
+                    if (project.name == "isar_flutter_libs") {
+                        namespace = "dev.isar.isar_flutter_libs"
+                    } else {
+                        namespace = project.group
+                    }
+                }
+            }
+        }
+    }
+}
+
+subprojects {
+    project.evaluationDependsOn(":app")
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
+}
