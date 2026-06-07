@@ -20,6 +20,7 @@ HybridLog is a high-performance, minimalist fitness tracker designed for the sop
 *   **🔥 Volume-Load Fatigue Heatmap:** Real-time muscle recovery visualization using a calibrated `weight × reps` volume-load model with time-decay, high-rep bonuses, and per-muscle thresholds.
 *   **📅 High-Density Workout History:** Dynamic chronological log organized by year-based selectors with collapsible weekday date cards and dedicated details popups.
 *   **🏠 Live Home-Screen Widget:** Keep your weekly progress at a glance with a real-time, interactive Android widget that bypasses OS caching for instant sync.
+*   **🎨 Custom Theming & Monkeytype Palettes:** Choose from 11 custom themes (Carbon, Serika Dark, Nord, Cyberpunk, Laser, Sakura, Botanical, Modern Ink, Terra, Matrix, Red Dragon) via a horizontal visual preview selector showcasing actual color combinations.
 
 ---
 
