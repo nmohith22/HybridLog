@@ -44,11 +44,11 @@ HybridLog is a high-performance, minimalist fitness tracker designed for the sop
 ## 📥 Getting Started
 
 ### Installation
-You can find the latest release in the `release/` directory of this repository.
+You can download the latest compiled version directly from this repository: **[Download HybridLog.apk](release/HybridLog.apk)**.
 
-1.  Download `HybridLog.apk`.
-2.  Enable "Install from Unknown Sources" on your Android device.
-3.  Install and start building.
+1.  Download [HybridLog.apk](release/HybridLog.apk) to your Android device.
+2.  Enable "Install from Unknown Sources" in your device settings.
+3.  Open the APK to install and start tracking.
 
 ---
 
