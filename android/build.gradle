@@ -1,0 +1,45 @@
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.buildDir = "../build"
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+    
+    afterEvaluate { project ->
+        if (project.hasProperty('android')) {
+            project.android {
+                compileSdkVersion 35
+                buildToolsVersion "35.0.0"
+                
+                if (namespace == null) {
+                    if (project.name == "isar_flutter_libs") {
+                        namespace = "dev.isar.isar_flutter_libs"
+                    } else {
+                        namespace = project.group
+                    }
+                }
+            }
+        }
+    }
+}
+
+subprojects {
+    configurations.all {
+        resolutionStrategy {
+            force 'androidx.glance:glance-appwidget:1.1.0'
+            force 'androidx.glance:glance:1.1.0'
+        }
+    }
+}
+
+subprojects {
+    project.evaluationDependsOn(":app")
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
+}

@@ -1,0 +1,55 @@
+# 🧊 HybridLog
+HybridLog is a high-performance, minimalist fitness tracker designed for the sophisticated athlete. It combines high-density information architecture with a tactile aesthetic to turn every workout into a building block for your future self.
+
+---
+
+## Aesthetic & Philosophy
+
+*   **Quiet Luxury:** A muted, non-intrusive color palette.
+*   **Tactile Feedback:** Every interaction uses animation suite—staggered pops, springy buttons, and satisfying snapping transitions.
+*   **Gesture-Driven:** No cluttered navigation bars. Navigate through your training history and planning with smooth, horizontal swipes.
+
+---
+
+## 🚀 Key Features
+
+*   **🏗️ Building Block Graph:** A vertical-drag running mileage tracker. Add miles like blocks and watch your week build up.
+*   **⚖️ Resistance Training Tracking:** Log exercises, sets, and reps with a UI optimized for speed and stability. Organizes exercises across multiple customizable folders.
+*   **🌙 Environment-Aware Weather Intelligence:** Real-time outdoor workout advice that adjusts for temperature, wind, and sunset. Features a night-mode moon icon and safety tips after dark.
+*   **📦 Muscle-Group Visualization:** Standardized anatomical tracking (e.g., "Front Deltoids") featuring multiple main/secondary muscle selections and interactive front/back body SVG previews.
+*   **🔥 Volume-Load Fatigue Heatmap:** Real-time muscle recovery visualization using a calibrated `weight × reps` volume-load model with time-decay, high-rep bonuses, and per-muscle thresholds.
+*   **📅 High-Density Workout History:** Dynamic chronological log organized by year-based selectors with collapsible weekday date cards and dedicated details popups.
+*   **🏠 Live Home-Screen Widget:** Keep your weekly progress at a glance with a real-time, interactive Android widget that bypasses OS caching for instant sync.
+
+---
+
+## 🛠️ Technology Stack
+
+*   **Framework:** [Flutter](https://flutter.dev/) (3.x)
+*   **Database:** [Isar](https://isar.dev/) - An ultra-fast, cross-platform NoSQL database.
+*   **State Management:** Service-based architecture with Stream-based real-time UI updates.
+*   **Native Integration:** Kotlin-based Android AppWidgets with custom atomic broadcast receivers.
+
+---
+
+## 🛡️ Privacy & Data Integrity
+
+**Your data belongs to you.**
+*   **Local Only:** HybridLog does not use any cloud backends. All workout history, mileage, and personal metrics are stored strictly on your device using the encrypted Isar database.
+*   **Zero Remote Access:** No user data is ever uploaded, shared, or accessible from GitHub or any remote server.
+*   **Offline First:** Works anywhere.
+
+---
+
+## 📥 Getting Started
+
+### Installation
+You can find the latest release in the `release/` directory of this repository.
+
+1.  Download `HybridLog.apk`.
+2.  Enable "Install from Unknown Sources" on your Android device.
+3.  Install and start building.
+
+---
+
+Have fun!

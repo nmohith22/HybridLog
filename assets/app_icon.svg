@@ -1,0 +1,15 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1024" height="1024" rx="200" fill="#120E15"/>
+  
+  <!-- Divider Line -->
+  <rect x="508" y="200" width="8" height="624" fill="#D93846" opacity="0.3"/>
+
+  <!-- RUNNER (Left Side) -->
+  <path d="M420 300C420 316.569 406.569 330 390 330C373.431 330 360 316.569 360 300C360 283.431 373.431 270 390 270C406.569 270 420 283.431 420 300Z" fill="#D93846"/>
+  <path d="M390 330L360 420L300 450M390 330L440 380L410 450M360 420L380 500L350 580L280 600M380 500L430 550L410 650L460 720" stroke="#D93846" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- LIFTER (Right Side) -->
+  <path d="M660 300C660 316.569 646.569 330 630 330C613.431 330 600 316.569 600 300C600 283.431 613.431 270 630 270C646.569 270 660 283.431 660 300Z" fill="#D93846"/>
+  <path d="M550 400H710M550 380V420M710 380V420M630 330V450L580 550V720M630 450L680 550V720" stroke="#D93846" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
