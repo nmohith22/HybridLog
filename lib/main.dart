@@ -3,6 +3,7 @@ import 'package:isar/isar.dart';
 import 'services/database_service.dart';
 import 'services/widget_service.dart';
 import 'screens/main_navigation.dart';
+import 'services/theme_service.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:flutter/foundation.dart';
 
@@ -13,6 +14,9 @@ void main() async {
   
   // IMMERSIVE FULLSCREEN MODE
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+
+  // Initialize theme service
+  await ThemeService().init();
   
   // Non-blocking background initialization
   DatabaseService().database.catchError((e) {
@@ -54,48 +58,59 @@ class WorkoutApp extends StatefulWidget {
 }
 
 class _WorkoutAppState extends State<WorkoutApp> {
-  ThemeMode _themeMode = ThemeMode.system;
-
-  void toggleTheme() {
-    setState(() {
-      // Toggle logic: System -> Light -> Dark -> System
-      if (_themeMode == ThemeMode.system) _themeMode = ThemeMode.light;
-      else if (_themeMode == ThemeMode.light) _themeMode = ThemeMode.dark;
-      else _themeMode = ThemeMode.system;
-    });
+  @override
+  void initState() {
+    super.initState();
+    ThemeService().addListener(_onThemeChanged);
   }
 
-  bool get isDarkMode => _themeMode == ThemeMode.dark;
+  @override
+  void dispose() {
+    ThemeService().removeListener(_onThemeChanged);
+    super.dispose();
+  }
+
+  void _onThemeChanged() {
+    setState(() {});
+  }
+
+  void toggleTheme() {
+    final service = ThemeService();
+    final current = service.currentThemeId;
+    if (current == 'system') {
+      service.setTheme('light');
+    } else if (current == 'light') {
+      service.setTheme('dark');
+    } else {
+      service.setTheme('system');
+    }
+  }
+
+  bool get isDarkMode => ThemeService().getResolvedTheme(context).isDark;
 
   @override
   Widget build(BuildContext context) {
+    final service = ThemeService();
+    final currentId = service.currentThemeId;
+    
+    ThemeData lightTheme;
+    ThemeData darkTheme;
+    
+    if (currentId == 'system') {
+      lightTheme = service.getThemeDataFor('light');
+      darkTheme = service.getThemeDataFor('dark');
+    } else {
+      final activeThemeData = service.getThemeDataFor(currentId);
+      lightTheme = activeThemeData;
+      darkTheme = activeThemeData;
+    }
+
     return MaterialApp(
       title: 'HybridLog',
       debugShowCheckedModeBanner: false,
-      themeMode: _themeMode,
-      theme: ThemeData(
-        brightness: Brightness.light,
-        primaryColor: const Color(0xFFC05545), // Muted Terracotta/Red
-        scaffoldBackgroundColor: const Color(0xFFF2F2F7), // Softer Apple-like gray
-        colorScheme: const ColorScheme.light(
-          primary: Color(0xFFC05545),
-          secondary: Color(0xFF5E7D5E), // Muted Sage Green
-          surface: Colors.white,
-          onSurface: Color(0xFF2C2C2E),
-        ),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        brightness: Brightness.dark,
-        primaryColor: Colors.deepOrange,
-        scaffoldBackgroundColor: const Color(0xFF121212),
-        colorScheme: const ColorScheme.dark(
-          primary: Colors.deepOrange,
-          secondary: Colors.deepOrangeAccent,
-          surface: Color(0xFF1E1E1E),
-        ),
-        useMaterial3: true,
-      ),
+      themeMode: service.themeMode,
+      theme: lightTheme,
+      darkTheme: darkTheme,
       home: const MainNavigation(),
     );
   }

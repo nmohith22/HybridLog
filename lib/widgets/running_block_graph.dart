@@ -105,8 +105,8 @@ class _RunningBlockGraphState extends State<RunningBlockGraph> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = Theme.of(context).colorScheme.primary;
-    final textColor = isDark ? Colors.white : Colors.black87;
-    final containerColor = isDark ? const Color(0xFF1A1A1A) : Colors.white;
+    final textColor = Theme.of(context).colorScheme.onSurface;
+    final containerColor = Theme.of(context).colorScheme.surface;
 
     // LegoPop only on the entire container for entrance
     return LegoPop(
@@ -116,7 +116,7 @@ class _RunningBlockGraphState extends State<RunningBlockGraph> {
         decoration: BoxDecoration(
           color: containerColor, 
           borderRadius: BorderRadius.circular(24), 
-          border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+          border: Border.all(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.08)),
           boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
         ),
         child: PageView.builder(

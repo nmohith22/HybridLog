@@ -7,6 +7,8 @@ import '../services/database_service.dart';
 import '../services/exercise_seed.dart';
 import '../services/data_backup_service.dart';
 import '../services/widget_service.dart';
+import '../services/theme_service.dart';
+import '../widgets/theme_picker_widget.dart';
 import '../main.dart';
 import '../widgets/lego_animations.dart';
 
@@ -125,9 +127,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   Future<Map<String, List<Exercise>>>? _favoritesFuture;
   Future<List<DailyWorkout>>? _historyFuture;
 
-  final Color bgDarkPurple = const Color(0xFF120E15);
-  final Color cardPurple = const Color(0xFF1A1523);
-  final Color accentRed = const Color(0xFFD93846);
+  Color get bgDarkPurple => ThemeService().getResolvedTheme(context).background;
+  Color get cardPurple => ThemeService().getResolvedTheme(context).card;
+  Color get accentRed => ThemeService().getResolvedTheme(context).accent;
 
   @override
   void initState() {
@@ -1348,54 +1350,58 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       builder: (context) => AlertDialog(
         backgroundColor: isDark ? cardPurple : Colors.white,
         title: Text('Settings', style: TextStyle(color: isDark ? Colors.white : Colors.black)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(isDark ? Icons.light_mode : Icons.dark_mode, color: Colors.grey),
-              title: Text(isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-              onTap: () {
-                Navigator.pop(context);
-                WorkoutApp.of(context)?.toggleTheme();
-              },
-            ),
-            const Divider(color: Colors.black12),
-            ListTile(
-              leading: const Icon(Icons.upload, color: Colors.grey),
-              title: Text('Export Data', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-              onTap: () async {
-                Navigator.pop(context);
-                final error = await DataBackupService.exportData();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(backgroundColor: isDark ? cardPurple : Colors.white, content: Text(error ?? 'Data exported successfully', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
-                  );
-                }
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.download, color: Colors.grey),
-              title: Text('Import Data', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-              onTap: () async {
-                Navigator.pop(context);
-                final error = await DataBackupService.importData();
-                if (error == null) {
-                  _initializeData();
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(isDark ? Icons.light_mode : Icons.dark_mode, color: Colors.grey),
+                title: Text(isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
+                onTap: () {
+                  Navigator.pop(context);
+                  WorkoutApp.of(context)?.toggleTheme();
+                },
+              ),
+              const Divider(color: Colors.black12),
+              ListTile(
+                leading: const Icon(Icons.upload, color: Colors.grey),
+                title: Text('Export Data', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final error = await DataBackupService.exportData();
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Data imported successfully')),
+                      SnackBar(backgroundColor: isDark ? cardPurple : Colors.white, content: Text(error ?? 'Data exported successfully', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
                     );
                   }
-                } else {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(backgroundColor: Colors.red, content: Text('Import failed: $error', style: const TextStyle(color: Colors.white))),
-                    );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.download, color: Colors.grey),
+                title: Text('Import Data', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final error = await DataBackupService.importData();
+                  if (error == null) {
+                    _initializeData();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Data imported successfully')),
+                      );
+                    }
+                  } else {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(backgroundColor: Colors.red, content: Text('Import failed: $error', style: const TextStyle(color: Colors.white))),
+                      );
+                    }
                   }
-                }
-              },
-            ),
-          ],
+                },
+              ),
+              const Divider(color: Colors.black12),
+              const ThemePickerWidget(),
+            ],
+          ),
         ),
         actions: [
           TextButton(

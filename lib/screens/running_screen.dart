@@ -8,6 +8,8 @@ import '../widgets/weather_advice_widget.dart';
 import '../services/weather_service.dart';
 import '../widgets/lego_animations.dart';
 import '../services/data_backup_service.dart';
+import '../services/theme_service.dart';
+import '../widgets/theme_picker_widget.dart';
 import '../main.dart';
 
 class RunningScreen extends StatefulWidget {
@@ -35,60 +37,64 @@ class _RunningScreenState extends State<RunningScreen> {
 
   void _showSettingsDialog() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    const cardPurple = Color(0xFF231D2C);
+    final cardPurple = ThemeService().getResolvedTheme(context).card;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: isDark ? cardPurple : Colors.white,
+        backgroundColor: cardPurple,
         title: Text('Settings', style: TextStyle(color: isDark ? Colors.white : Colors.black)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(isDark ? Icons.light_mode : Icons.dark_mode, color: Colors.grey),
-              title: Text(isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-              onTap: () {
-                Navigator.pop(context);
-                WorkoutApp.of(context)?.toggleTheme();
-              },
-            ),
-            const Divider(color: Colors.black12),
-            ListTile(
-              leading: const Icon(Icons.upload, color: Colors.grey),
-              title: Text('Export Data', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-              onTap: () async {
-                Navigator.pop(context);
-                final error = await DataBackupService.exportData();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(backgroundColor: isDark ? cardPurple : Colors.white, content: Text(error ?? 'Data exported successfully', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
-                  );
-                }
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.download, color: Colors.grey),
-              title: Text('Import Data', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-              onTap: () async {
-                Navigator.pop(context);
-                final error = await DataBackupService.importData();
-                if (error == null) {
-                  _calculateYearlyTotal();
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(isDark ? Icons.light_mode : Icons.dark_mode, color: Colors.grey),
+                title: Text(isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
+                onTap: () {
+                  Navigator.pop(context);
+                  WorkoutApp.of(context)?.toggleTheme();
+                },
+              ),
+              const Divider(color: Colors.black12),
+              ListTile(
+                leading: const Icon(Icons.upload, color: Colors.grey),
+                title: Text('Export Data', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final error = await DataBackupService.exportData();
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Data imported successfully')),
+                      SnackBar(backgroundColor: cardPurple, content: Text(error ?? 'Data exported successfully', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
                     );
                   }
-                } else {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(backgroundColor: Colors.red, content: Text('Import failed: $error', style: const TextStyle(color: Colors.white))),
-                    );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.download, color: Colors.grey),
+                title: Text('Import Data', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final error = await DataBackupService.importData();
+                  if (error == null) {
+                    _calculateYearlyTotal();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Data imported successfully')),
+                      );
+                    }
+                  } else {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(backgroundColor: Colors.red, content: Text('Import failed: $error', style: const TextStyle(color: Colors.white))),
+                      );
+                    }
                   }
-                }
-              },
-            ),
-          ],
+                },
+              ),
+              const Divider(color: Colors.black12),
+              const ThemePickerWidget(),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -131,16 +137,16 @@ class _RunningScreenState extends State<RunningScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1523),
-        title: const Text("Enter City", style: TextStyle(color: Colors.white)),
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        title: Text("Enter City", style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
         content: TextField(
           controller: controller,
           autofocus: true,
-          style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+          decoration: InputDecoration(
             hintText: "e.g. New York, London",
-            hintStyle: TextStyle(color: Colors.grey),
-            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
+            hintStyle: const TextStyle(color: Colors.grey),
+            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3))),
           ),
         ),
         actions: [
@@ -154,7 +160,7 @@ class _RunningScreenState extends State<RunningScreen> {
               _loadWeather();
               Navigator.pop(context);
             },
-            child: const Text("Search", style: TextStyle(color: Color(0xFFD93846), fontWeight: FontWeight.bold)),
+            child: Text("Search", style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -173,15 +179,16 @@ class _RunningScreenState extends State<RunningScreen> {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1A1523),
+      backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) {
+        final theme = Theme.of(context);
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text("Select Year", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              Text("Select Year", style: TextStyle(color: theme.colorScheme.onSurface, fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
               SizedBox(
                 height: 200,
@@ -191,7 +198,7 @@ class _RunningScreenState extends State<RunningScreen> {
                     final year = sortedYears[index];
                     final isSelected = year == _selectedYear;
                     return ListTile(
-                      title: Text('$year', textAlign: TextAlign.center, style: TextStyle(color: isSelected ? const Color(0xFFD93846) : Colors.white, fontSize: 20, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+                      title: Text('$year', textAlign: TextAlign.center, style: TextStyle(color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface, fontSize: 20, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
                       onTap: () {
                         setState(() {
                           _selectedYear = year;

@@ -112,9 +112,9 @@ class _YearlyHeatmapCalendarState extends State<YearlyHeatmapCalendar> {
 
   Widget _buildYearView() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = isDark ? const Color(0xFF1A1523) : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black87;
-    final borderColor = isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05);
+    final cardColor = Theme.of(context).colorScheme.surface;
+    final textColor = Theme.of(context).colorScheme.onSurface;
+    final borderColor = Theme.of(context).colorScheme.onSurface.withOpacity(0.08);
 
     return GridView.builder(
       key: const ValueKey('year_view'),
@@ -144,8 +144,8 @@ class _YearlyHeatmapCalendarState extends State<YearlyHeatmapCalendar> {
 
   Widget _buildMonthView() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black87;
+    final cardColor = Theme.of(context).colorScheme.surface;
+    final textColor = Theme.of(context).colorScheme.onSurface;
 
     return ListView.builder(
       key: const ValueKey('month_view'),
