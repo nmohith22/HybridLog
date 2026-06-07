@@ -379,18 +379,40 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   @override
   void dispose() { _tabController.dispose(); _sheetController.dispose(); _mainScrollController.dispose(); _libraryScrollController.dispose(); _searchController.dispose(); super.dispose(); }
 
-  void _openLoggingSheet(Exercise exercise, {DailyWorkout? editWorkout, int? editExIndex, DateTime? targetDate}) {
+  Future<void> _openLoggingSheet(Exercise exercise, {DailyWorkout? editWorkout, int? editExIndex, DateTime? targetDate}) async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? cardPurple : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
+
+    double defaultWeight = 0.0;
+    if (editWorkout == null) {
+      try {
+        final db = await DatabaseService().database;
+        final lastWorkout = await db.dailyWorkouts
+            .filter()
+            .exercisesElement((q) => q.exerciseNameEqualTo(exercise.name))
+            .sortByDateDesc()
+            .findFirst();
+        if (lastWorkout != null) {
+          final loggedExs = lastWorkout.exercises.where((e) => e.exerciseName == exercise.name);
+          final weights = loggedExs.expand((e) => e.sets).map((s) => s.weight).toList();
+          if (weights.isNotEmpty) {
+            defaultWeight = weights.reduce((curr, next) => curr < next ? curr : next);
+          }
+        }
+      } catch (e) {
+        debugPrint("Error fetching last workout weight: $e");
+      }
+    }
 
     List<SetLog> currentSets;
     if (editWorkout != null && editExIndex != null) {
       final existingEx = editWorkout.exercises[editExIndex];
       currentSets = existingEx.sets.map((s) => SetLog()..reps = s.reps..weight = s.weight).toList();
-    } else { currentSets = [SetLog()..reps = 10..weight = 0.0]; }
+    } else { currentSets = [SetLog()..reps = 10..weight = defaultWeight]; }
 
     final mainMuscles = exercise.targetMuscles.isNotEmpty ? exercise.targetMuscles : [exercise.targetMuscle];
+    final weightHint = defaultWeight % 1 == 0 ? defaultWeight.toInt().toString() : defaultWeight.toString();
 
     showModalBottomSheet(
       context: context, backgroundColor: bgColor, isScrollControlled: true,
@@ -412,7 +434,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       final picked = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime.now());
                       if (picked != null) { Navigator.pop(context); _openLoggingSheet(exercise, targetDate: picked); }
                     }, icon: const Icon(Icons.calendar_today, color: Colors.grey)),
-                    IconButton(icon: const Icon(Icons.add_circle, color: Colors.deepOrange, size: 32), onPressed: () => setModalState(() => currentSets.add(SetLog()..reps = 10..weight = 0.0))),
+                    IconButton(icon: const Icon(Icons.add_circle, color: Colors.deepOrange, size: 32), onPressed: () => setModalState(() => currentSets.add(SetLog()..reps = 10..weight = defaultWeight))),
                   ])
                 ]),
                 const SizedBox(height: 16),
@@ -425,7 +447,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     padding: const EdgeInsets.symmetric(vertical: 6.0),
                     child: Row(children: [
                       Expanded(flex: 1, child: Text('${index + 1}', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold))),
-                      Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8.0), child: TextFormField(initialValue: currentSets[index].weight == 0 ? '' : currentSets[index].weight.toString(), keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'(^\d*\.?\d*)'))], style: TextStyle(color: textColor, fontWeight: FontWeight.bold), decoration: InputDecoration(filled: true, fillColor: isDark ? bgDarkPurple : Colors.grey[100], border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)), onChanged: (v) => currentSets[index].weight = double.tryParse(v) ?? 0.0))),
+                      Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8.0), child: TextFormField(initialValue: currentSets[index].weight == defaultWeight && editWorkout == null ? '' : (currentSets[index].weight % 1 == 0 ? currentSets[index].weight.toInt().toString() : currentSets[index].weight.toString()), keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'(^\d*\.?\d*)'))], style: TextStyle(color: textColor, fontWeight: FontWeight.bold), decoration: InputDecoration(filled: true, fillColor: isDark ? bgDarkPurple : Colors.grey[100], hintText: weightHint, hintStyle: const TextStyle(color: Colors.grey), suffixText: 'lbs', suffixStyle: const TextStyle(color: Colors.grey, fontSize: 14), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)), onChanged: (v) => currentSets[index].weight = double.tryParse(v) ?? 0.0))),
                       Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8.0), child: TextFormField(initialValue: currentSets[index].reps == 10 && editWorkout == null ? '' : currentSets[index].reps.toString(), keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], style: TextStyle(color: textColor, fontWeight: FontWeight.bold), decoration: InputDecoration(filled: true, fillColor: isDark ? bgDarkPurple : Colors.grey[100], hintText: '10', hintStyle: const TextStyle(color: Colors.grey), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)), onChanged: (v) => currentSets[index].reps = int.tryParse(v) ?? 0))),
                     ]),
                   ),

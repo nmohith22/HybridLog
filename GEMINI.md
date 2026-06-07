@@ -35,6 +35,7 @@ A senior-engineered, high-performance fitness tracking application built with Fl
 - **Multi-Select Chips & Checklists:** Implemented multi-select target/secondary muscle chips and a checklist toggle for folders in the exercise creator modal.
 - **History Tab Redesign:** Rewrote the workout history section to render chronologically descending date/weekday cards grouped under a top-left year selector.
 - **Workout Detail Modals:** Tapping a history card opens a modal overlay featuring an "X" header close button, date/weekday info, and cards for all logged exercises.
+- **Smart Default Weights & Suffixes:** The exercise logging sheet defaults weight inputs to the lowest weight used during the last logged session for that specific exercise. The weight text field displays a grayed-out 'lbs' suffix to cleanly differentiate it from the reps cell.
 
 ### 3. Toolchain & Build Fixes
 - **Local Toolchain Setup:** Configured Windows local SDK path at `C:\Users\mskyl\android_sdk` and OpenJDK 17 at `C:\Users\mskyl\openjdk\jdk-17.0.11+9`.
