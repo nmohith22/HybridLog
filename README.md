@@ -14,7 +14,7 @@ HybridLog is a high-performance, minimalist fitness tracker designed for the sop
 ## 🚀 Key Features
 
 *   **🏗️ Building Block Graph:** A vertical-drag running mileage tracker. Add miles like blocks and watch your week build up.
-*   **⚖️ Resistance Training Tracking:** Log exercises, sets, and reps with a UI optimized for speed and stability. Organizes exercises across multiple customizable folders.
+*   **⚖️ Resistance Training Tracking:** Log exercises, sets, and reps with a UI optimized for speed and stability. Organizes exercises across folders, featuring advanced filtering (by muscle & manufacturer), clean hierarchical naming for long exercises, and custom sorting (A-Z, Z-A, and Most Recent).
 *   **🌙 Environment-Aware Weather Intelligence:** Real-time outdoor workout advice that adjusts for temperature, wind, and sunset. Features a night-mode moon icon and safety tips after dark.
 *   **📦 Muscle-Group Visualization:** Standardized anatomical tracking (e.g., "Front Deltoids") featuring multiple main/secondary muscle selections and interactive front/back body SVG previews.
 *   **🔥 Volume-Load Fatigue Heatmap:** Real-time muscle recovery visualization using a calibrated `weight × reps` volume-load model with time-decay, high-rep bonuses, and per-muscle thresholds.

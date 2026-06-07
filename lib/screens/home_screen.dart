@@ -115,6 +115,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   Map<String, double> _muscleIntensities = {}; 
   String _searchQuery = "";
   List<String> _selectedMuscles = [];
+  String? _selectedManufacturer;
+  String _selectedSort = 'a-z';
   double _sheetSize = 0.05;
   int _selectedHistoryYear = DateTime.now().year;
 
@@ -213,29 +215,35 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     // Non-blocking widget update
     WidgetService.updateRunningWidget().catchError((e) => debugPrint('Widget update error: $e'));
     
-    // Improved seeding check: count total exercises, if significantly less than seed, re-seed.
-    final count = await db.exercises.count();
-    if (count < initialExercises.length) {
-      await db.writeTxn(() async {
-        for (var exData in initialExercises) {
-          final existing = await db.exercises.filter().nameEqualTo(exData['name']!).findFirst();
-          if (existing != null) {
-            existing.targetMuscle = exData['primary']!;
-            existing.targetMuscles = [exData['primary']!];
-            existing.secondaryMuscles = List<String>.from(exData['secondary'] ?? []);
+    // Synchronize seed exercises to update muscles and manufacturers without losing favorites/folders
+    await db.writeTxn(() async {
+      for (var exData in initialExercises) {
+        final existing = await db.exercises.filter().nameEqualTo(exData['name']!).findFirst();
+        if (existing != null) {
+          final newPrimary = exData['primary']!;
+          final newSecondary = List<String>.from(exData['secondary'] ?? []);
+          bool needsUpdate = existing.targetMuscle != newPrimary ||
+              existing.targetMuscles.isEmpty ||
+              existing.targetMuscles.first != newPrimary ||
+              existing.secondaryMuscles.length != newSecondary.length ||
+              !existing.secondaryMuscles.every((m) => newSecondary.contains(m));
+          if (needsUpdate) {
+            existing.targetMuscle = newPrimary;
+            existing.targetMuscles = [newPrimary];
+            existing.secondaryMuscles = newSecondary;
             await db.exercises.put(existing);
-          } else {
-            final newEx = Exercise()
-              ..name = exData['name']!
-              ..targetMuscle = exData['primary']!
-              ..targetMuscles = [exData['primary']!]
-              ..secondaryMuscles = List<String>.from(exData['secondary'] ?? [])
-              ..isFavorite = false;
-            await db.exercises.put(newEx);
           }
+        } else {
+          final newEx = Exercise()
+            ..name = exData['name']!
+            ..targetMuscle = exData['primary']!
+            ..targetMuscles = [exData['primary']!]
+            ..secondaryMuscles = List<String>.from(exData['secondary'] ?? [])
+            ..isFavorite = false;
+          await db.exercises.put(newEx);
         }
-      });
-    }
+      }
+    });
     _loadRecentMuscles();
     _refreshData();
   }
@@ -557,11 +565,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    MarqueeText(
-                      text: ex.name,
+                    FormattedExerciseName(
+                      fullName: ex.name,
                       style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: -0.5),
+                      secondaryColor: secondaryTextColor ?? Colors.grey,
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 4),
                     if (sets != null && sets.isNotEmpty)
                       Text(
                         sets.map((s) => '${s.reps}x${s.weight.toInt()}').join(', '),
@@ -793,7 +802,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       Padding(padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0), child: Row(children: [
         Expanded(child: TextField(controller: _searchController, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14), onChanged: (v) { _searchQuery = v; _refreshData(); }, decoration: InputDecoration(hintText: "Search library...", hintStyle: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400]), prefixIcon: const Icon(Icons.search, color: Colors.grey, size: 20), filled: true, fillColor: isDark ? cardPurple : Colors.grey[100], contentPadding: const EdgeInsets.symmetric(vertical: 0), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)))),
         const SizedBox(width: 8),
-        IconButton(icon: Icon(Icons.filter_list, color: _selectedMuscles.isEmpty ? Colors.grey : accentRed), onPressed: _showFilterDialog),
+        IconButton(
+          icon: Icon(
+            Icons.filter_list, 
+            color: (_selectedMuscles.isEmpty && _selectedManufacturer == null && _selectedSort == 'a-z') 
+                ? Colors.grey 
+                : accentRed
+          ), 
+          onPressed: _showFilterDialog,
+        ),
         const SizedBox(width: 4),
         TextButton(onPressed: _showAddCustomExerciseDialog, child: Text("+ Add", style: TextStyle(color: accentRed, fontWeight: FontWeight.bold))),
       ])),
@@ -984,30 +1001,265 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   Future<List<Exercise>> _getFilteredExercises() async {
     final db = await DatabaseService().database;
-    List<Exercise> results = await db.exercises.where().sortByName().findAll();
-    if (_searchQuery.isNotEmpty) results = results.where((ex) => ex.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+    List<Exercise> results = await db.exercises.where().findAll();
+    
+    // Apply search filter
+    if (_searchQuery.isNotEmpty) {
+      results = results.where((ex) => ex.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+    }
+    
+    // Apply manufacturer filter
+    if (_selectedManufacturer != null) {
+      results = results.where((ex) => ex.name.toLowerCase().contains(_selectedManufacturer!.toLowerCase())).toList();
+    }
+    
+    // Apply target muscle filter
     if (_selectedMuscles.isNotEmpty) {
       results = results.where((ex) {
         final mains = ex.targetMuscles.isNotEmpty ? ex.targetMuscles : [ex.targetMuscle];
         return mains.any((m) => _selectedMuscles.contains(m));
       }).toList();
     }
+
+    // Apply sorting
+    if (_selectedSort == 'a-z') {
+      results.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    } else if (_selectedSort == 'z-a') {
+      results.sort((a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase()));
+    } else if (_selectedSort == 'most-recent') {
+      try {
+        final workouts = await db.dailyWorkouts.where().sortByDateDesc().findAll();
+        final Map<String, DateTime> lastLoggedMap = {};
+        for (var w in workouts) {
+          for (var ex in w.exercises) {
+            if (ex.exerciseName != null) {
+              lastLoggedMap.putIfAbsent(ex.exerciseName!, () => w.date);
+            }
+          }
+        }
+        results.sort((a, b) {
+          final dateA = lastLoggedMap[a.name];
+          final dateB = lastLoggedMap[b.name];
+          if (dateA == null && dateB == null) return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+          if (dateA == null) return 1;
+          if (dateB == null) return -1;
+          return dateB.compareTo(dateA);
+        });
+      } catch (e) {
+        debugPrint("Error sorting by most recent: $e");
+        results.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      }
+    }
+
     return results;
   }
 
   void _showFilterDialog() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    const allMuscles = ['chest', 'abs', 'obliques', 'front_deltoids', 'side_deltoids', 'back_deltoids', 'biceps', 'triceps', 'lats', 'lower_back', 'traps', 'quads', 'hamstrings', 'glutes', 'calves'];
-    showModalBottomSheet(context: context, backgroundColor: isDark ? cardPurple : Colors.white, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))), builder: (context) {
-      return StatefulBuilder(builder: (context, setFilterState) {
-        return Padding(padding: const EdgeInsets.all(24.0), child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text("Filter by Muscle", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 20, fontWeight: FontWeight.bold)), TextButton(onPressed: () { setFilterState(() => _selectedMuscles = []); _refreshData(); }, child: Text("Clear All", style: TextStyle(color: accentRed)))]),
-          const SizedBox(height: 16),
-          Wrap(spacing: 8, runSpacing: 8, children: allMuscles.map((muscle) { bool isSelected = _selectedMuscles.contains(muscle); return FilterChip(label: Text(muscle.replaceAll('_', ' ').toUpperCase(), style: TextStyle(color: isSelected ? Colors.white : Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)), selected: isSelected, onSelected: (selected) { setFilterState(() { if (selected) _selectedMuscles.add(muscle); else _selectedMuscles.remove(muscle); }); _refreshData(); }, selectedColor: accentRed, backgroundColor: isDark ? bgDarkPurple : Colors.grey[100], checkmarkColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))); }).toList()),
-          const SizedBox(height: 32),
-        ]));
-      });
-    });
+    const allMuscles = [
+      'chest', 'abs', 'obliques', 'front_deltoids', 'side_deltoids', 
+      'back_deltoids', 'biceps', 'triceps', 'lats', 'lower_back', 
+      'traps', 'quads', 'hamstrings', 'glutes', 'calves'
+    ];
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? cardPurple : Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setFilterState) {
+            return DraggableScrollableSheet(
+              initialChildSize: 0.65,
+              minChildSize: 0.4,
+              maxChildSize: 0.9,
+              expand: false,
+              builder: (context, scrollController) {
+                return SingleChildScrollView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            "Filters & Sorting",
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black87,
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              setFilterState(() {
+                                _selectedMuscles = [];
+                                _selectedManufacturer = null;
+                                _selectedSort = 'a-z';
+                              });
+                              _refreshData();
+                            },
+                            child: Text(
+                              "Reset All",
+                              style: TextStyle(
+                                color: accentRed,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 24, thickness: 1),
+                      Text(
+                        "SORT BY",
+                        style: TextStyle(
+                          color: isDark ? Colors.grey[400] : Colors.grey[700],
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          ChoiceChip(
+                            label: const Text("A-Z"),
+                            selected: _selectedSort == 'a-z',
+                            onSelected: (selected) {
+                              if (selected) {
+                                setFilterState(() => _selectedSort = 'a-z');
+                                _refreshData();
+                              }
+                            },
+                            selectedColor: accentRed,
+                            labelStyle: TextStyle(color: _selectedSort == 'a-z' ? Colors.white : (isDark ? Colors.grey : Colors.black87)),
+                          ),
+                          const SizedBox(width: 8),
+                          ChoiceChip(
+                            label: const Text("Z-A"),
+                            selected: _selectedSort == 'z-a',
+                            onSelected: (selected) {
+                              if (selected) {
+                                setFilterState(() => _selectedSort = 'z-a');
+                                _refreshData();
+                              }
+                            },
+                            selectedColor: accentRed,
+                            labelStyle: TextStyle(color: _selectedSort == 'z-a' ? Colors.white : (isDark ? Colors.grey : Colors.black87)),
+                          ),
+                          const SizedBox(width: 8),
+                          ChoiceChip(
+                            label: const Text("MOST RECENT"),
+                            selected: _selectedSort == 'most-recent',
+                            onSelected: (selected) {
+                              if (selected) {
+                                setFilterState(() => _selectedSort = 'most-recent');
+                                _refreshData();
+                              }
+                            },
+                            selectedColor: accentRed,
+                            labelStyle: TextStyle(color: _selectedSort == 'most-recent' ? Colors.white : (isDark ? Colors.grey : Colors.black87)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        "MANUFACTURER",
+                        style: TextStyle(
+                          color: isDark ? Colors.grey[400] : Colors.grey[700],
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          ChoiceChip(
+                            label: const Text("LIFE FITNESS"),
+                            selected: _selectedManufacturer == 'Life Fitness',
+                            onSelected: (selected) {
+                              setFilterState(() {
+                                _selectedManufacturer = selected ? 'Life Fitness' : null;
+                              });
+                              _refreshData();
+                            },
+                            selectedColor: accentRed,
+                            labelStyle: TextStyle(color: _selectedManufacturer == 'Life Fitness' ? Colors.white : (isDark ? Colors.grey : Colors.black87)),
+                          ),
+                          const SizedBox(width: 8),
+                          ChoiceChip(
+                            label: const Text("HAMMER STRENGTH"),
+                            selected: _selectedManufacturer == 'Hammer Strength',
+                            onSelected: (selected) {
+                              setFilterState(() {
+                                _selectedManufacturer = selected ? 'Hammer Strength' : null;
+                              });
+                              _refreshData();
+                            },
+                            selectedColor: accentRed,
+                            labelStyle: TextStyle(color: _selectedManufacturer == 'Hammer Strength' ? Colors.white : (isDark ? Colors.grey : Colors.black87)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        "TARGET MUSCLE",
+                        style: TextStyle(
+                          color: isDark ? Colors.grey[400] : Colors.grey[700],
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: allMuscles.map((muscle) {
+                          bool isSelected = _selectedMuscles.contains(muscle);
+                          return FilterChip(
+                            label: Text(
+                              muscle.replaceAll('_', ' ').toUpperCase(),
+                              style: TextStyle(
+                                color: isSelected ? Colors.white : Colors.grey,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              setFilterState(() {
+                                if (selected) {
+                                  _selectedMuscles.add(muscle);
+                                } else {
+                                  _selectedMuscles.remove(muscle);
+                                }
+                              });
+                              _refreshData();
+                            },
+                            selectedColor: accentRed,
+                            backgroundColor: isDark ? bgDarkPurple : Colors.grey[100],
+                            checkmarkColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 32),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
   }
 
   void _showSettingsDialog() {
@@ -1601,6 +1853,81 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ],
         );
       },
+    );
+  }
+}
+
+class FormattedExerciseName extends StatelessWidget {
+  final String fullName;
+  final TextStyle style;
+  final Color secondaryColor;
+
+  const FormattedExerciseName({
+    super.key,
+    required this.fullName,
+    required this.style,
+    required this.secondaryColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    String name = fullName;
+    String? manufacturer;
+    String? detail;
+
+    // Detect manufacturer prefixes
+    if (name.startsWith("Hammer Strength ")) {
+      manufacturer = "Hammer Strength";
+      name = name.replaceFirst("Hammer Strength ", "");
+    } else if (name.startsWith("Life Fitness ")) {
+      manufacturer = "Life Fitness";
+      name = name.replaceFirst("Life Fitness ", "");
+    } else if (name.startsWith("Hoist Roc-it ")) {
+      manufacturer = "Hoist Roc-it";
+      name = name.replaceFirst("Hoist Roc-it ", "");
+    }
+
+    // Detect parenthesis details at the end
+    final parenIndex = name.indexOf('(');
+    if (parenIndex != -1 && name.endsWith(')')) {
+      detail = name.substring(parenIndex + 1, name.length - 1);
+      name = name.substring(0, parenIndex).trim();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (manufacturer != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2.0),
+            child: Text(
+              manufacturer.toUpperCase(),
+              style: const TextStyle(
+                color: Color(0xFFC05545), // Muted red/terracotta accent color
+                fontSize: 9,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.0,
+              ),
+            ),
+          ),
+        MarqueeText(
+          text: name,
+          style: style,
+        ),
+        if (detail != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 2.0),
+            child: Text(
+              detail,
+              style: TextStyle(
+                color: secondaryColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
