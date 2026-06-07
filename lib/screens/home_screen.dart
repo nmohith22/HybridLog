@@ -496,6 +496,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     return !backMuscles.contains(muscle);
   }
 
+  String? _parseManufacturer(String fullName) {
+    if (fullName.contains(' | ')) {
+      return fullName.split(' | ').first;
+    }
+    if (fullName.startsWith("Hammer Strength ")) {
+      return "Hammer Strength";
+    }
+    if (fullName.startsWith("Life Fitness ")) {
+      return "Life Fitness";
+    }
+    if (fullName.startsWith("Hoist Roc-it ")) {
+      return "Hoist Roc-it";
+    }
+    return null;
+  }
+
   Widget _buildExerciseCard(Exercise ex, {
     bool showDate = false,
     DateTime? date,
@@ -826,6 +842,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   void _showAddCustomExerciseDialog() {
     final nameController = TextEditingController();
+    final manufacturerController = TextEditingController();
     final isDark = Theme.of(context).brightness == Brightness.dark;
     List<String> selectedTargetMuscles = [];
     List<String> selectedSecondaryMuscles = [];
@@ -852,6 +869,41 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       hintStyle: const TextStyle(color: Colors.grey),
                       enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: isDark ? Colors.white10 : Colors.black12)),
                     ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text("MANUFACTURER (OPTIONAL)", style: TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: manufacturerController,
+                    style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+                    decoration: InputDecoration(
+                      hintText: "e.g., Rogue, Life Fitness",
+                      hintStyle: const TextStyle(color: Colors.grey),
+                      enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: isDark ? Colors.white10 : Colors.black12)),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: ['Life Fitness', 'Hammer Strength', 'Hoist Roc-it'].map((m) {
+                      return GestureDetector(
+                        onTap: () {
+                          manufacturerController.text = m;
+                        },
+                        child: Chip(
+                          label: Text(
+                            m,
+                            style: TextStyle(
+                              color: isDark ? Colors.grey[300] : Colors.black87,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          backgroundColor: isDark ? bgDarkPurple : Colors.grey[200],
+                          side: BorderSide.none,
+                        ),
+                      );
+                    }).toList(),
                   ),
                   const SizedBox(height: 24),
                   const Text("SELECT TARGET MUSCLES (MAIN)", style: TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
@@ -978,9 +1030,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               onPressed: () async {
                 if (nameController.text.isNotEmpty && selectedTargetMuscles.isNotEmpty) {
                   final db = await DatabaseService().database;
+                  final manufacturerText = manufacturerController.text.trim();
+                  final fullName = manufacturerText.isNotEmpty 
+                      ? "$manufacturerText | ${nameController.text.trim()}" 
+                      : nameController.text.trim();
                   await db.writeTxn(() async {
                     final ex = Exercise()
-                      ..name = nameController.text
+                      ..name = fullName
                       ..targetMuscle = selectedTargetMuscles.first
                       ..targetMuscles = selectedTargetMuscles
                       ..secondaryMuscles = selectedSecondaryMuscles
@@ -1054,13 +1110,32 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     return results;
   }
 
-  void _showFilterDialog() {
+  void _showFilterDialog() async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     const allMuscles = [
       'chest', 'abs', 'obliques', 'front_deltoids', 'side_deltoids', 
       'back_deltoids', 'biceps', 'triceps', 'lats', 'lower_back', 
       'traps', 'quads', 'hamstrings', 'glutes', 'calves'
     ];
+
+    // Dynamically retrieve all unique manufacturers present in the database
+    List<String> sortedManufacturers;
+    try {
+      final db = await DatabaseService().database;
+      final exercises = await db.exercises.where().findAll();
+      final manufacturers = <String>{};
+      for (var ex in exercises) {
+        final m = _parseManufacturer(ex.name);
+        if (m != null) manufacturers.add(m);
+      }
+      sortedManufacturers = manufacturers.toList()..sort();
+    } catch (e) {
+      debugPrint("Error loading manufacturers: $e");
+      sortedManufacturers = ['Life Fitness', 'Hammer Strength', 'Hoist Roc-it'];
+    }
+
+    if (!mounted) return;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: isDark ? cardPurple : Colors.white,
@@ -1135,7 +1210,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               }
                             },
                             selectedColor: accentRed,
-                            labelStyle: TextStyle(color: _selectedSort == 'a-z' ? Colors.white : (isDark ? Colors.grey : Colors.black87)),
+                            backgroundColor: isDark ? bgDarkPurple : Colors.grey[100],
+                            side: BorderSide.none,
+                            labelStyle: TextStyle(color: _selectedSort == 'a-z' ? Colors.white : (isDark ? Colors.grey : Colors.black87), fontSize: 10, fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(width: 8),
                           ChoiceChip(
@@ -1148,7 +1225,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               }
                             },
                             selectedColor: accentRed,
-                            labelStyle: TextStyle(color: _selectedSort == 'z-a' ? Colors.white : (isDark ? Colors.grey : Colors.black87)),
+                            backgroundColor: isDark ? bgDarkPurple : Colors.grey[100],
+                            side: BorderSide.none,
+                            labelStyle: TextStyle(color: _selectedSort == 'z-a' ? Colors.white : (isDark ? Colors.grey : Colors.black87), fontSize: 10, fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(width: 8),
                           ChoiceChip(
@@ -1161,7 +1240,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               }
                             },
                             selectedColor: accentRed,
-                            labelStyle: TextStyle(color: _selectedSort == 'most-recent' ? Colors.white : (isDark ? Colors.grey : Colors.black87)),
+                            backgroundColor: isDark ? bgDarkPurple : Colors.grey[100],
+                            side: BorderSide.none,
+                            labelStyle: TextStyle(color: _selectedSort == 'most-recent' ? Colors.white : (isDark ? Colors.grey : Colors.black87), fontSize: 10, fontWeight: FontWeight.bold),
                           ),
                         ],
                       ),
@@ -1176,34 +1257,32 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          ChoiceChip(
-                            label: const Text("LIFE FITNESS"),
-                            selected: _selectedManufacturer == 'Life Fitness',
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: sortedManufacturers.map((m) {
+                          final isSelected = _selectedManufacturer == m;
+                          return ChoiceChip(
+                            label: Text(m.toUpperCase()),
+                            selected: isSelected,
                             onSelected: (selected) {
                               setFilterState(() {
-                                _selectedManufacturer = selected ? 'Life Fitness' : null;
+                                _selectedManufacturer = selected ? m : null;
                               });
                               _refreshData();
                             },
                             selectedColor: accentRed,
-                            labelStyle: TextStyle(color: _selectedManufacturer == 'Life Fitness' ? Colors.white : (isDark ? Colors.grey : Colors.black87)),
-                          ),
-                          const SizedBox(width: 8),
-                          ChoiceChip(
-                            label: const Text("HAMMER STRENGTH"),
-                            selected: _selectedManufacturer == 'Hammer Strength',
-                            onSelected: (selected) {
-                              setFilterState(() {
-                                _selectedManufacturer = selected ? 'Hammer Strength' : null;
-                              });
-                              _refreshData();
-                            },
-                            selectedColor: accentRed,
-                            labelStyle: TextStyle(color: _selectedManufacturer == 'Hammer Strength' ? Colors.white : (isDark ? Colors.grey : Colors.black87)),
-                          ),
-                        ],
+                            backgroundColor: isDark ? bgDarkPurple : Colors.grey[100],
+                            side: BorderSide.none,
+                            labelStyle: TextStyle(
+                              color: isSelected 
+                                  ? Colors.white 
+                                  : (isDark ? Colors.grey : Colors.black87),
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          );
+                        }).toList(),
                       ),
                       const SizedBox(height: 24),
                       Text(
