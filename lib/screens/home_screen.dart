@@ -694,9 +694,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           onTap: () async {
                             await db.writeTxn(() async {
                               if (isAssigned) {
-                                ex.folderNames.remove(f.name);
+                                ex.folderNames = List.from(ex.folderNames)..remove(f.name);
                               } else {
-                                ex.folderNames.add(f.name);
+                                ex.folderNames = List.from(ex.folderNames)..add(f.name);
                                 ex.isFavorite = true;
                               }
                               // Backwards compatibility fallback:
@@ -725,7 +725,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           : null,
                       onTap: () async {
                         await db.writeTxn(() async {
-                          ex.folderNames.clear();
+                          ex.folderNames = [];
                           ex.folderName = null;
                           await db.exercises.put(ex);
                         });
@@ -776,7 +776,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           await db.workoutFolders.put(f);
                         }
                         if (!ex.folderNames.contains(newF)) {
-                          ex.folderNames.add(newF);
+                          ex.folderNames = List.from(ex.folderNames)..add(newF);
                           ex.isFavorite = true;
                           ex.folderName = ex.folderNames.first;
                         }
