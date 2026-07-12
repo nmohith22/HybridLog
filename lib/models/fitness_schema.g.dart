@@ -1782,7 +1782,8 @@ const DailyWorkoutSchema = CollectionSchema(
   links: {},
   embeddedSchemas: {
     r'LoggedExercise': LoggedExerciseSchema,
-    r'SetLog': SetLogSchema
+    r'SetLog': SetLogSchema,
+    r'SubSetLog': SubSetLogSchema
   },
   getId: _dailyWorkoutGetId,
   getLinks: _dailyWorkoutGetLinks,
@@ -3450,6 +3451,198 @@ extension WorkoutFolderQueryProperty
 // coverage:ignore-file
 // ignore_for_file: duplicate_ignore, non_constant_identifier_names, constant_identifier_names, invalid_use_of_protected_member, unnecessary_cast, prefer_const_constructors, lines_longer_than_80_chars, require_trailing_commas, inference_failure_on_function_invocation, unnecessary_parenthesis, unnecessary_raw_strings, unnecessary_null_checks, join_return_with_assignment, prefer_final_locals, avoid_js_rounded_ints, avoid_positional_boolean_parameters, always_specify_types
 
+const SubSetLogSchema = Schema(
+  name: r'SubSetLog',
+  id: -8387819610331959312,
+  properties: {
+    r'reps': PropertySchema(
+      id: 0,
+      name: r'reps',
+      type: IsarType.long,
+    ),
+    r'weight': PropertySchema(
+      id: 1,
+      name: r'weight',
+      type: IsarType.double,
+    )
+  },
+  estimateSize: _subSetLogEstimateSize,
+  serialize: _subSetLogSerialize,
+  deserialize: _subSetLogDeserialize,
+  deserializeProp: _subSetLogDeserializeProp,
+);
+
+int _subSetLogEstimateSize(
+  SubSetLog object,
+  List<int> offsets,
+  Map<Type, List<int>> allOffsets,
+) {
+  var bytesCount = offsets.last;
+  return bytesCount;
+}
+
+void _subSetLogSerialize(
+  SubSetLog object,
+  IsarWriter writer,
+  List<int> offsets,
+  Map<Type, List<int>> allOffsets,
+) {
+  writer.writeLong(offsets[0], object.reps);
+  writer.writeDouble(offsets[1], object.weight);
+}
+
+SubSetLog _subSetLogDeserialize(
+  Id id,
+  IsarReader reader,
+  List<int> offsets,
+  Map<Type, List<int>> allOffsets,
+) {
+  final object = SubSetLog();
+  object.reps = reader.readLong(offsets[0]);
+  object.weight = reader.readDouble(offsets[1]);
+  return object;
+}
+
+P _subSetLogDeserializeProp<P>(
+  IsarReader reader,
+  int propertyId,
+  int offset,
+  Map<Type, List<int>> allOffsets,
+) {
+  switch (propertyId) {
+    case 0:
+      return (reader.readLong(offset)) as P;
+    case 1:
+      return (reader.readDouble(offset)) as P;
+    default:
+      throw IsarError('Unknown property with id $propertyId');
+  }
+}
+
+extension SubSetLogQueryFilter
+    on QueryBuilder<SubSetLog, SubSetLog, QFilterCondition> {
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition> repsEqualTo(
+      int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'reps',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition> repsGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'reps',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition> repsLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'reps',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition> repsBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'reps',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition> weightEqualTo(
+    double value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'weight',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition> weightGreaterThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'weight',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition> weightLessThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'weight',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition> weightBetween(
+    double lower,
+    double upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'weight',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
+    });
+  }
+}
+
+extension SubSetLogQueryObject
+    on QueryBuilder<SubSetLog, SubSetLog, QFilterCondition> {}
+
+// coverage:ignore-file
+// ignore_for_file: duplicate_ignore, non_constant_identifier_names, constant_identifier_names, invalid_use_of_protected_member, unnecessary_cast, prefer_const_constructors, lines_longer_than_80_chars, require_trailing_commas, inference_failure_on_function_invocation, unnecessary_parenthesis, unnecessary_raw_strings, unnecessary_null_checks, join_return_with_assignment, prefer_final_locals, avoid_js_rounded_ints, avoid_positional_boolean_parameters, always_specify_types
+
 const SetLogSchema = Schema(
   name: r'SetLog',
   id: 7663625254499761518,
@@ -3459,8 +3652,19 @@ const SetLogSchema = Schema(
       name: r'reps',
       type: IsarType.long,
     ),
-    r'weight': PropertySchema(
+    r'restPauseSeconds': PropertySchema(
       id: 1,
+      name: r'restPauseSeconds',
+      type: IsarType.long,
+    ),
+    r'subSets': PropertySchema(
+      id: 2,
+      name: r'subSets',
+      type: IsarType.objectList,
+      target: r'SubSetLog',
+    ),
+    r'weight': PropertySchema(
+      id: 3,
       name: r'weight',
       type: IsarType.double,
     )
@@ -3477,6 +3681,14 @@ int _setLogEstimateSize(
   Map<Type, List<int>> allOffsets,
 ) {
   var bytesCount = offsets.last;
+  bytesCount += 3 + object.subSets.length * 3;
+  {
+    final offsets = allOffsets[SubSetLog]!;
+    for (var i = 0; i < object.subSets.length; i++) {
+      final value = object.subSets[i];
+      bytesCount += SubSetLogSchema.estimateSize(value, offsets, allOffsets);
+    }
+  }
   return bytesCount;
 }
 
@@ -3487,7 +3699,14 @@ void _setLogSerialize(
   Map<Type, List<int>> allOffsets,
 ) {
   writer.writeLong(offsets[0], object.reps);
-  writer.writeDouble(offsets[1], object.weight);
+  writer.writeLong(offsets[1], object.restPauseSeconds);
+  writer.writeObjectList<SubSetLog>(
+    offsets[2],
+    allOffsets,
+    SubSetLogSchema.serialize,
+    object.subSets,
+  );
+  writer.writeDouble(offsets[3], object.weight);
 }
 
 SetLog _setLogDeserialize(
@@ -3498,7 +3717,15 @@ SetLog _setLogDeserialize(
 ) {
   final object = SetLog();
   object.reps = reader.readLong(offsets[0]);
-  object.weight = reader.readDouble(offsets[1]);
+  object.restPauseSeconds = reader.readLongOrNull(offsets[1]);
+  object.subSets = reader.readObjectList<SubSetLog>(
+        offsets[2],
+        SubSetLogSchema.deserialize,
+        allOffsets,
+        SubSetLog(),
+      ) ??
+      [];
+  object.weight = reader.readDouble(offsets[3]);
   return object;
 }
 
@@ -3512,6 +3739,16 @@ P _setLogDeserializeProp<P>(
     case 0:
       return (reader.readLong(offset)) as P;
     case 1:
+      return (reader.readLongOrNull(offset)) as P;
+    case 2:
+      return (reader.readObjectList<SubSetLog>(
+            offset,
+            SubSetLogSchema.deserialize,
+            allOffsets,
+            SubSetLog(),
+          ) ??
+          []) as P;
+    case 3:
       return (reader.readDouble(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -3568,6 +3805,161 @@ extension SetLogQueryFilter on QueryBuilder<SetLog, SetLog, QFilterCondition> {
         upper: upper,
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<SetLog, SetLog, QAfterFilterCondition> restPauseSecondsIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'restPauseSeconds',
+      ));
+    });
+  }
+
+  QueryBuilder<SetLog, SetLog, QAfterFilterCondition>
+      restPauseSecondsIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'restPauseSeconds',
+      ));
+    });
+  }
+
+  QueryBuilder<SetLog, SetLog, QAfterFilterCondition> restPauseSecondsEqualTo(
+      int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'restPauseSeconds',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<SetLog, SetLog, QAfterFilterCondition>
+      restPauseSecondsGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'restPauseSeconds',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<SetLog, SetLog, QAfterFilterCondition> restPauseSecondsLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'restPauseSeconds',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<SetLog, SetLog, QAfterFilterCondition> restPauseSecondsBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'restPauseSeconds',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<SetLog, SetLog, QAfterFilterCondition> subSetsLengthEqualTo(
+      int length) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'subSets',
+        length,
+        true,
+        length,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<SetLog, SetLog, QAfterFilterCondition> subSetsIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'subSets',
+        0,
+        true,
+        0,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<SetLog, SetLog, QAfterFilterCondition> subSetsIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'subSets',
+        0,
+        false,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<SetLog, SetLog, QAfterFilterCondition> subSetsLengthLessThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'subSets',
+        0,
+        true,
+        length,
+        include,
+      );
+    });
+  }
+
+  QueryBuilder<SetLog, SetLog, QAfterFilterCondition> subSetsLengthGreaterThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'subSets',
+        length,
+        include,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<SetLog, SetLog, QAfterFilterCondition> subSetsLengthBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'subSets',
+        lower,
+        includeLower,
+        upper,
+        includeUpper,
+      );
     });
   }
 
@@ -3634,7 +4026,14 @@ extension SetLogQueryFilter on QueryBuilder<SetLog, SetLog, QFilterCondition> {
   }
 }
 
-extension SetLogQueryObject on QueryBuilder<SetLog, SetLog, QFilterCondition> {}
+extension SetLogQueryObject on QueryBuilder<SetLog, SetLog, QFilterCondition> {
+  QueryBuilder<SetLog, SetLog, QAfterFilterCondition> subSetsElement(
+      FilterQuery<SubSetLog> q) {
+    return QueryBuilder.apply(this, (query) {
+      return query.object(q, r'subSets');
+    });
+  }
+}
 
 // coverage:ignore-file
 // ignore_for_file: duplicate_ignore, non_constant_identifier_names, constant_identifier_names, invalid_use_of_protected_member, unnecessary_cast, prefer_const_constructors, lines_longer_than_80_chars, require_trailing_commas, inference_failure_on_function_invocation, unnecessary_parenthesis, unnecessary_raw_strings, unnecessary_null_checks, join_return_with_assignment, prefer_final_locals, avoid_js_rounded_ints, avoid_positional_boolean_parameters, always_specify_types

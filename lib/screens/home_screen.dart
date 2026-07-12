@@ -11,6 +11,7 @@ import '../services/theme_service.dart';
 import '../widgets/theme_picker_widget.dart';
 import '../main.dart';
 import '../widgets/lego_animations.dart';
+import 'exercise_history_screen.dart';
 
 // --- HELPER: MARQUEE TEXT ---
 class MarqueeText extends StatefulWidget {
@@ -395,6 +396,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     final textColor = isDark ? Colors.white : Colors.black87;
 
     double defaultWeight = 0.0;
+    int defaultReps = 10;
     if (editWorkout == null) {
       try {
         final db = await DatabaseService().database;
@@ -405,9 +407,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             .findFirst();
         if (lastWorkout != null) {
           final loggedExs = lastWorkout.exercises.where((e) => e.exerciseName == exercise.name);
-          final weights = loggedExs.expand((e) => e.sets).map((s) => s.weight).toList();
-          if (weights.isNotEmpty) {
-            defaultWeight = weights.reduce((curr, next) => curr < next ? curr : next);
+          final sets = loggedExs.expand((e) => e.sets).toList();
+          if (sets.isNotEmpty) {
+            defaultWeight = sets.map((s) => s.weight).reduce((curr, next) => curr < next ? curr : next);
+            defaultReps = sets.last.reps;
           }
         }
       } catch (e) {
@@ -418,11 +421,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     List<SetLog> currentSets;
     if (editWorkout != null && editExIndex != null) {
       final existingEx = editWorkout.exercises[editExIndex];
-      currentSets = existingEx.sets.map((s) => SetLog()..reps = s.reps..weight = s.weight).toList();
-    } else { currentSets = [SetLog()..reps = 10..weight = defaultWeight]; }
+      currentSets = existingEx.sets.map((s) => SetLog()..reps = s.reps..weight = s.weight..subSets = s.subSets.map((sub) => SubSetLog()..reps = sub.reps..weight = sub.weight).toList()..restPauseSeconds = s.restPauseSeconds).toList();
+    } else { currentSets = [SetLog()..reps = defaultReps..weight = defaultWeight]; }
 
     final mainMuscles = exercise.targetMuscles.isNotEmpty ? exercise.targetMuscles : [exercise.targetMuscle];
     final weightHint = defaultWeight % 1 == 0 ? defaultWeight.toInt().toString() : defaultWeight.toString();
+    final repsHint = defaultReps.toString();
 
     showModalBottomSheet(
       context: context, backgroundColor: bgColor, isScrollControlled: true,
@@ -444,7 +448,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       final picked = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime.now());
                       if (picked != null) { Navigator.pop(context); _openLoggingSheet(exercise, targetDate: picked); }
                     }, icon: const Icon(Icons.calendar_today, color: Colors.grey)),
-                    IconButton(icon: const Icon(Icons.add_circle, color: Colors.deepOrange, size: 32), onPressed: () => setModalState(() => currentSets.add(SetLog()..reps = 10..weight = defaultWeight))),
+                    IconButton(iconSize: 28, onPressed: () {
+                      Navigator.pop(context);
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => ExerciseHistoryScreen(exercise: exercise)));
+                    }, icon: const Icon(Icons.history, color: Colors.blueAccent)),
+                    IconButton(icon: const Icon(Icons.add_circle, color: Colors.deepOrange, size: 32), onPressed: () => setModalState(() => currentSets.add(SetLog()..reps = defaultReps..weight = defaultWeight))),
                   ])
                 ]),
                 const SizedBox(height: 16),
@@ -455,11 +463,57 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   background: Container(alignment: Alignment.centerLeft, padding: const EdgeInsets.only(left: 20), color: Colors.red.withOpacity(0.2), child: const Icon(Icons.delete, color: Colors.red)),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 6.0),
-                    child: Row(children: [
-                      Expanded(flex: 1, child: Text('${index + 1}', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold))),
-                      Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8.0), child: TextFormField(initialValue: currentSets[index].weight == defaultWeight && editWorkout == null ? '' : (currentSets[index].weight % 1 == 0 ? currentSets[index].weight.toInt().toString() : currentSets[index].weight.toString()), keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'(^\d*\.?\d*)'))], style: TextStyle(color: textColor, fontWeight: FontWeight.bold), decoration: InputDecoration(filled: true, fillColor: isDark ? bgDarkPurple : Colors.grey[100], hintText: weightHint, hintStyle: const TextStyle(color: Colors.grey), suffixText: 'lbs', suffixStyle: const TextStyle(color: Colors.grey, fontSize: 14), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)), onChanged: (v) => currentSets[index].weight = double.tryParse(v) ?? 0.0))),
-                      Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8.0), child: TextFormField(initialValue: currentSets[index].reps == 10 && editWorkout == null ? '' : currentSets[index].reps.toString(), keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], style: TextStyle(color: textColor, fontWeight: FontWeight.bold), decoration: InputDecoration(filled: true, fillColor: isDark ? bgDarkPurple : Colors.grey[100], hintText: '10', hintStyle: const TextStyle(color: Colors.grey), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)), onChanged: (v) => currentSets[index].reps = int.tryParse(v) ?? 0))),
-                    ]),
+                    child: Column(
+                      children: [
+                        Row(children: [
+                          Expanded(flex: 1, child: Text('${index + 1}', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold))),
+                          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8.0), child: TextFormField(initialValue: currentSets[index].weight == defaultWeight && editWorkout == null ? '' : (currentSets[index].weight % 1 == 0 ? currentSets[index].weight.toInt().toString() : currentSets[index].weight.toString()), keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'(^\d*\.?\d*)'))], style: TextStyle(color: textColor, fontWeight: FontWeight.bold), decoration: InputDecoration(filled: true, fillColor: isDark ? bgDarkPurple : Colors.grey[100], hintText: weightHint, hintStyle: const TextStyle(color: Colors.grey), suffixText: 'lbs', suffixStyle: const TextStyle(color: Colors.grey, fontSize: 14), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)), onChanged: (v) => currentSets[index].weight = double.tryParse(v) ?? 0.0))),
+                          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8.0), child: TextFormField(initialValue: currentSets[index].reps == defaultReps && editWorkout == null ? '' : currentSets[index].reps.toString(), keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], style: TextStyle(color: textColor, fontWeight: FontWeight.bold), decoration: InputDecoration(filled: true, fillColor: isDark ? bgDarkPurple : Colors.grey[100], hintText: repsHint, hintStyle: const TextStyle(color: Colors.grey), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)), onChanged: (v) => currentSets[index].reps = int.tryParse(v) ?? 0))),
+                        ]),
+                        // SubSets (Dropsets/Supersets)
+                        ...List.generate(currentSets[index].subSets.length, (subIndex) => Padding(
+                          padding: const EdgeInsets.only(top: 8.0, left: 32.0),
+                          child: Row(children: [
+                            Expanded(flex: 1, child: Text('Drop', style: TextStyle(color: accentRed, fontSize: 14, fontWeight: FontWeight.bold))),
+                            Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8.0), child: TextFormField(initialValue: currentSets[index].subSets[subIndex].weight == 0 ? '' : (currentSets[index].subSets[subIndex].weight % 1 == 0 ? currentSets[index].subSets[subIndex].weight.toInt().toString() : currentSets[index].subSets[subIndex].weight.toString()), keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'(^\d*\.?\d*)'))], style: TextStyle(color: textColor, fontWeight: FontWeight.bold), decoration: InputDecoration(filled: true, fillColor: isDark ? bgDarkPurple : Colors.grey[100], hintText: '0', hintStyle: const TextStyle(color: Colors.grey), suffixText: 'lbs', suffixStyle: const TextStyle(color: Colors.grey, fontSize: 14), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)), onChanged: (v) => currentSets[index].subSets[subIndex].weight = double.tryParse(v) ?? 0.0))),
+                            Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8.0), child: TextFormField(initialValue: currentSets[index].subSets[subIndex].reps == 0 ? '' : currentSets[index].subSets[subIndex].reps.toString(), keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], style: TextStyle(color: textColor, fontWeight: FontWeight.bold), decoration: InputDecoration(filled: true, fillColor: isDark ? bgDarkPurple : Colors.grey[100], hintText: '0', hintStyle: const TextStyle(color: Colors.grey), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)), onChanged: (v) => currentSets[index].subSets[subIndex].reps = int.tryParse(v) ?? 0))),
+                            IconButton(icon: const Icon(Icons.close, color: Colors.grey, size: 18), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () => setModalState(() => currentSets[index].subSets.removeAt(subIndex))),
+                          ]),
+                        )),
+                        // Rest Pause
+                        if (currentSets[index].restPauseSeconds != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0, left: 32.0),
+                            child: Row(children: [
+                              Expanded(flex: 1, child: Text('Pause', style: TextStyle(color: Colors.orange, fontSize: 14, fontWeight: FontWeight.bold))),
+                              Expanded(flex: 4, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8.0), child: TextFormField(initialValue: currentSets[index].restPauseSeconds.toString(), keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], style: TextStyle(color: textColor, fontWeight: FontWeight.bold), decoration: InputDecoration(filled: true, fillColor: isDark ? bgDarkPurple : Colors.grey[100], hintText: 'Sec', suffixText: 's', suffixStyle: const TextStyle(color: Colors.grey, fontSize: 14), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)), onChanged: (v) { final val = int.tryParse(v) ?? 0; currentSets[index].restPauseSeconds = val > 60 ? 60 : val; }))),
+                              IconButton(icon: const Icon(Icons.close, color: Colors.grey, size: 18), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () => setModalState(() => currentSets[index].restPauseSeconds = null)),
+                            ]),
+                          ),
+                        // Actions
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8.0, left: 32.0),
+                          child: Row(
+                            children: [
+                              TextButton.icon(
+                                style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                                onPressed: () => setModalState(() => currentSets[index].subSets.add(SubSetLog()..reps = 0..weight = 0.0)),
+                                icon: const Icon(Icons.arrow_drop_down, color: Colors.grey, size: 16),
+                                label: const Text('Add Dropset', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                              ),
+                              const SizedBox(width: 16),
+                              if (currentSets[index].restPauseSeconds == null)
+                                TextButton.icon(
+                                  style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                                  onPressed: () => setModalState(() => currentSets[index].restPauseSeconds = 15),
+                                  icon: const Icon(Icons.timer, color: Colors.grey, size: 16),
+                                  label: const Text('Rest Pause', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                ),
+                            ]
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 )),
                 const SizedBox(height: 24),

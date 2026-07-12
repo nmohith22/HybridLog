@@ -16,11 +16,20 @@ class Exercise {
   List<String> folderNames = []; // Multiple folders
 }
 
+// A sub-set (for dropsets/supersets within a single main set)
+@embedded
+class SubSetLog {
+  int reps = 0;
+  double weight = 0.0;
+}
+
 // A single Set (e.g., 10 reps at 135 lbs)
 @embedded
 class SetLog {
   int reps = 0;
   double weight = 0.0;
+  List<SubSetLog> subSets = []; // For dropsets and supersets
+  int? restPauseSeconds; // Rest-pause duration in seconds (max 60)
 }
 
 // An exercise performed on a specific day

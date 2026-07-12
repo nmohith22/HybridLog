@@ -187,6 +187,61 @@ class ThemeService extends ChangeNotifier {
       subText: Color(0xFF634244),
       isDark: true,
     ),
+    // Dracula
+    const AppTheme(
+      id: 'dracula',
+      name: 'Dracula',
+      background: Color(0xFF282A36),
+      card: Color(0xFF44475A),
+      accent: Color(0xFFFF79C6),
+      text: Color(0xFFF8F8F2),
+      subText: Color(0xFF6272A4),
+      isDark: true,
+    ),
+    // Gruvbox
+    const AppTheme(
+      id: 'gruvbox',
+      name: 'Gruvbox',
+      background: Color(0xFF282828),
+      card: Color(0xFF3C3836),
+      accent: Color(0xFFFE8019),
+      text: Color(0xFFEBDBB2),
+      subText: Color(0xFFA89984),
+      isDark: true,
+    ),
+    // Catppuccin
+    const AppTheme(
+      id: 'catppuccin',
+      name: 'Catppuccin',
+      background: Color(0xFF1E1E2E),
+      card: Color(0xFF313244),
+      accent: Color(0xFFCBA6F7),
+      text: Color(0xFFCDD6F4),
+      subText: Color(0xFF9399B2),
+      isDark: true,
+    ),
+    // Tokyo Night
+    const AppTheme(
+      id: 'tokyo_night',
+      name: 'Tokyo Night',
+      background: Color(0xFF1A1B26),
+      card: Color(0xFF24283B),
+      accent: Color(0xFF7AA2F7),
+      text: Color(0xFFC0CAF5),
+      subText: Color(0xFF565F89),
+      isDark: true,
+    ),
+    // Monokai
+    const AppTheme(
+      id: 'monokai',
+      name: 'Monokai',
+      background: Color(0xFF272822),
+      card: Color(0xFF3E3D32),
+      accent: Color(0xFFF92672),
+      text: Color(0xFFF8F8F2),
+      subText: Color(0xFF75715E),
+      isDark: true,
+    ),
   ];
 
   String _currentThemeId = 'system';
