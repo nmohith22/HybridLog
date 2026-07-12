@@ -328,12 +328,21 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         for (var s in log.sets) {
           final effectiveWeight = s.weight > 0 ? s.weight : _bodyweightFallback;
           exerciseVolumeLoad += effectiveWeight * s.reps;
+          for (var sub in s.subSets) {
+            final effectiveSubWeight = sub.weight > 0 ? sub.weight : _bodyweightFallback;
+            exerciseVolumeLoad += effectiveSubWeight * sub.reps;
+          }
         }
 
         // High-rep endurance bonus: sets above 20 reps per set are
         // disproportionately fatiguing. Apply a 1.15× multiplier.
         if (totalSets > 0) {
-          final avgRepsPerSet = log.sets.fold(0, (sum, s) => sum + s.reps) / totalSets;
+          int sumReps = 0;
+          for (var s in log.sets) {
+            sumReps += s.reps;
+            for (var sub in s.subSets) sumReps += sub.reps;
+          }
+          final avgRepsPerSet = sumReps / totalSets;
           if (avgRepsPerSet > 20) {
             exerciseVolumeLoad *= 1.15;
           }
