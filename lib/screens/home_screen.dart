@@ -711,6 +711,21 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: accentRed,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        minimumSize: const Size(double.infinity, 50),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => ExerciseHistoryScreen(exercise: ex)));
+                      },
+                      icon: const Icon(Icons.analytics, color: Colors.white),
+                      label: const Text('Detailed View', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(height: 24),
                     if (folders.isNotEmpty) ...[
                       Align(
                         alignment: Alignment.centerLeft,
@@ -802,6 +817,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     ),
                     TextField(
                       controller: newFolderController,
+                      onChanged: (v) => setDialogState((){}),
                       style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14),
                       decoration: InputDecoration(
                         hintText: 'New Folder Name',
@@ -820,7 +836,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   child: const Text('Close', style: TextStyle(color: Colors.grey)),
                 ),
                 TextButton(
-                  onPressed: () async {
+                  onPressed: newFolderController.text.isEmpty ? null : () async {
                     if (newFolderController.text.isNotEmpty) {
                       final newF = newFolderController.text;
                       await db.writeTxn(() async {
@@ -846,7 +862,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       _refreshData();
                     }
                   },
-                  child: const Text('Create & Add', style: TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.bold)),
+                  child: Text('Create & Add', style: TextStyle(color: newFolderController.text.isEmpty ? Colors.grey : Colors.deepOrange, fontWeight: FontWeight.bold)),
                 ),
               ],
             );

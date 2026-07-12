@@ -63,6 +63,7 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
               : Column(
                   children: [
                     _buildChart(theme),
+                    _buildMetrics(theme),
                     Expanded(
                       child: ListView.builder(
                         itemCount: _history.length,
@@ -188,8 +189,20 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
                 titlesData: FlTitlesData(
                   bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 30,
+                      getTitlesWidget: (value, meta) => Text(value.toInt().toString(), style: const TextStyle(color: Colors.blueAccent, fontSize: 10)),
+                    ),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 40,
+                      getTitlesWidget: (value, meta) => Text('${value.toInt()} lb', style: TextStyle(color: theme.accent, fontSize: 10)),
+                    ),
+                  ),
                 ),
                 borderData: FlBorderData(show: false),
                 lineBarsData: [
@@ -211,6 +224,75 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetrics(AppTheme theme) {
+    if (_history.isEmpty) return const SizedBox.shrink();
+
+    int totalWorkouts = _history.length;
+    double maxWeightEver = 0;
+    int maxRepsInWorkout = 0;
+    double estimated1RM = 0;
+
+    for (var workout in _history) {
+      final loggedEx = workout.exercises.firstWhere((e) => e.exerciseName == widget.exercise.name);
+      int workoutReps = 0;
+      for (var s in loggedEx.sets) {
+        workoutReps += s.reps;
+        if (s.weight > maxWeightEver) maxWeightEver = s.weight;
+        
+        // Epley formula: 1RM = w * (1 + r/30)
+        double current1RM = s.weight * (1 + s.reps / 30.0);
+        if (current1RM > estimated1RM) estimated1RM = current1RM;
+
+        for (var sub in s.subSets) {
+          workoutReps += sub.reps;
+          if (sub.weight > maxWeightEver) maxWeightEver = sub.weight;
+          
+          double currentSub1RM = sub.weight * (1 + sub.reps / 30.0);
+          if (currentSub1RM > estimated1RM) estimated1RM = currentSub1RM;
+        }
+      }
+      if (workoutReps > maxRepsInWorkout) maxRepsInWorkout = workoutReps;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: GridView.count(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisCount: 2,
+        childAspectRatio: 2.5,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        children: [
+          _metricCard('Total Workouts', totalWorkouts.toString(), theme),
+          _metricCard('Max Weight', '${maxWeightEver.toInt()} lbs', theme),
+          _metricCard('Max Reps/Session', maxRepsInWorkout.toString(), theme),
+          _metricCard('Est. 1RM', '${estimated1RM.toInt()} lbs', theme),
+        ],
+      ),
+    );
+  }
+
+  Widget _metricCard(String title, String value, AppTheme theme) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.card,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.subText.withOpacity(0.1)),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: TextStyle(color: theme.subText, fontSize: 12, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(value, style: TextStyle(color: theme.text, fontSize: 18, fontWeight: FontWeight.w800)),
         ],
       ),
     );
