@@ -17,6 +17,7 @@ class ExerciseHistoryScreen extends StatefulWidget {
 class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
   List<DailyWorkout> _history = [];
   bool _isLoading = true;
+  int _selectedLineIndex = -1;
 
   @override
   void initState() {
@@ -159,6 +160,33 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
       repsSpots.add(FlSpot(i.toDouble(), totalReps.toDouble()));
     }
 
+    final showWeight = _selectedLineIndex == -1 || _selectedLineIndex == 0;
+    final showReps = _selectedLineIndex == -1 || _selectedLineIndex == 1;
+
+    final weightLine = LineChartBarData(
+      spots: weightSpots,
+      isCurved: true,
+      color: theme.accent,
+      barWidth: 3,
+      dotData: FlDotData(
+        show: true,
+        getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(radius: 4, color: theme.accent, strokeWidth: 2, strokeColor: theme.card),
+      ),
+      showingIndicators: [weightSpots.length - 1],
+    );
+
+    final repsLine = LineChartBarData(
+      spots: repsSpots,
+      isCurved: true,
+      color: Colors.blueAccent,
+      barWidth: 3,
+      dotData: FlDotData(
+        show: true,
+        getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(radius: 4, color: Colors.blueAccent, strokeWidth: 2, strokeColor: theme.card),
+      ),
+      showingIndicators: [repsSpots.length - 1],
+    );
+
     return Container(
       height: 250,
       padding: const EdgeInsets.all(16),
@@ -172,33 +200,62 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(width: 12, height: 12, color: theme.accent),
-              const SizedBox(width: 4),
-              Text('Max Weight', style: TextStyle(color: theme.text, fontSize: 12)),
+              GestureDetector(
+                onTap: () => setState(() => _selectedLineIndex = _selectedLineIndex == 0 ? -1 : 0),
+                child: Row(
+                  children: [
+                    Container(width: 12, height: 12, color: theme.accent.withOpacity(showWeight ? 1.0 : 0.3)),
+                    const SizedBox(width: 4),
+                    Text('Max Weight', style: TextStyle(color: theme.text.withOpacity(showWeight ? 1.0 : 0.3), fontSize: 12, fontWeight: showWeight ? FontWeight.bold : FontWeight.normal)),
+                  ]
+                ),
+              ),
               const SizedBox(width: 16),
-              Container(width: 12, height: 12, color: Colors.blueAccent),
-              const SizedBox(width: 4),
-              Text('Total Reps', style: TextStyle(color: theme.text, fontSize: 12)),
+              GestureDetector(
+                onTap: () => setState(() => _selectedLineIndex = _selectedLineIndex == 1 ? -1 : 1),
+                child: Row(
+                  children: [
+                    Container(width: 12, height: 12, color: Colors.blueAccent.withOpacity(showReps ? 1.0 : 0.3)),
+                    const SizedBox(width: 4),
+                    Text('Total Reps', style: TextStyle(color: theme.text.withOpacity(showReps ? 1.0 : 0.3), fontSize: 12, fontWeight: showReps ? FontWeight.bold : FontWeight.normal)),
+                  ]
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
           Expanded(
             child: LineChart(
               LineChartData(
+                lineTouchData: LineTouchData(
+                  enabled: true,
+                  touchTooltipData: LineTouchTooltipData(
+                    getTooltipColor: (touchedSpot) => theme.background.withOpacity(0.8),
+                    getTooltipItems: (touchedSpots) {
+                      return touchedSpots.map((spot) {
+                        final isWeight = spot.bar.color == theme.accent;
+                        return LineTooltipItem(
+                          '${spot.y.toInt()}${isWeight ? ' lbs' : ' reps'}',
+                          TextStyle(color: isWeight ? theme.accent : Colors.blueAccent, fontWeight: FontWeight.bold),
+                        );
+                      }).toList();
+                    },
+                  ),
+                ),
                 gridData: FlGridData(show: false),
                 titlesData: FlTitlesData(
                   bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   rightTitles: AxisTitles(
                     sideTitles: SideTitles(
-                      showTitles: true,
+                      showTitles: _selectedLineIndex == 1,
                       reservedSize: 30,
                       getTitlesWidget: (value, meta) => Text(value.toInt().toString(), style: const TextStyle(color: Colors.blueAccent, fontSize: 10)),
                     ),
                   ),
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
-                      showTitles: true,
+                      showTitles: _selectedLineIndex == 0,
                       reservedSize: 40,
                       getTitlesWidget: (value, meta) => Text('${value.toInt()} lb', style: TextStyle(color: theme.accent, fontSize: 10)),
                     ),
@@ -206,20 +263,8 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
                 ),
                 borderData: FlBorderData(show: false),
                 lineBarsData: [
-                  LineChartBarData(
-                    spots: weightSpots,
-                    isCurved: true,
-                    color: theme.accent,
-                    barWidth: 3,
-                    dotData: FlDotData(show: true),
-                  ),
-                  LineChartBarData(
-                    spots: repsSpots,
-                    isCurved: true,
-                    color: Colors.blueAccent,
-                    barWidth: 3,
-                    dotData: FlDotData(show: true),
-                  ),
+                  if (showWeight) weightLine,
+                  if (showReps) repsLine,
                 ],
               ),
             ),
