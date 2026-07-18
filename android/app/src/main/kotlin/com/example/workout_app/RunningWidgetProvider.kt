@@ -27,7 +27,9 @@ class RunningWidgetProvider : HomeWidgetProvider() {
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.running_widget_final)
             
-            val launchIntent = Intent(context, MainActivity::class.java)
+            val launchIntent = Intent(context, MainActivity::class.java).apply {
+                data = Uri.parse("hybridlog://open_app?ts=${System.currentTimeMillis()}")
+            }
             val pendingLaunchIntent = PendingIntent.getActivity(
                 context, 0, launchIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )

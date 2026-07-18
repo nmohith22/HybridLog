@@ -14,6 +14,13 @@ subprojects {
             project.android {
                 compileSdkVersion 35
                 buildToolsVersion "35.0.0"
+                compileOptions {
+                    sourceCompatibility JavaVersion.VERSION_17
+                    targetCompatibility JavaVersion.VERSION_17
+                }
+                kotlinOptions {
+                    jvmTarget = "17"
+                }
                 
                 if (namespace == null) {
                     if (project.name == "isar_flutter_libs") {
@@ -42,12 +49,4 @@ subprojects {
 
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
-}
-
-subprojects {
-    tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-        kotlinOptions {
-            jvmTarget = "17"
-        }
-    }
-}
+}
