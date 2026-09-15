@@ -12,83 +12,55 @@ import es.antonborri.home_widget.HomeWidgetProvider
 import es.antonborri.home_widget.HomeWidgetBackgroundIntent
 import android.util.Log
 import android.net.Uri
+import java.util.Calendar
 
 class RunningWidgetProvider : HomeWidgetProvider() {
     
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray, widgetData: SharedPreferences) {
         val prefs = context.getSharedPreferences("HomeWidgetPreferences", Context.MODE_PRIVATE)
-        val totalMiles = prefs.getInt("total_miles", 0)
         
-        Log.e("RunningWidget", "Visual Sync Start. Total: $totalMiles")
+        // Get today's day index (0 for Monday, 6 for Sunday) to match Dart logic
+        val calendar = Calendar.getInstance()
+        var dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK) - 2
+        if (dayOfWeek < 0) dayOfWeek += 7
+        
+        val todayMiles = prefs.getInt("day_${dayOfWeek}_miles", 0)
+        
+        Log.e("RunningWidget", "Visual Sync Start. Today ($dayOfWeek): $todayMiles")
 
-        val dayLabels = arrayOf("M", "T", "W", "T", "F", "S", "S")
+        val dayLabelsFull = arrayOf("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY")
 
-        // Force instance loop for extreme reliability
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.running_widget_final)
             
+            // OPEN APP INTENT (on Title)
             val launchIntent = Intent(context, MainActivity::class.java).apply {
                 data = Uri.parse("hybridlog://open_app?ts=${System.currentTimeMillis()}")
             }
             val pendingLaunchIntent = PendingIntent.getActivity(
                 context, 0, launchIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            views.setOnClickPendingIntent(R.id.widget_root, pendingLaunchIntent)
+            views.setOnClickPendingIntent(R.id.day_title, pendingLaunchIntent)
 
-            // ATOMIC TIMESTAMP to bypass Android layout caching
-            views.setTextViewText(R.id.total_miles, "$totalMiles mi")
+            // INCREMENT INTENT (on the entire widget root or a big button)
+            val incUri = Uri.parse("hybridlog://increment_day?dayIndex=$dayOfWeek&ts=${System.currentTimeMillis()}")
+            val incIntent = HomeWidgetBackgroundIntent.getBroadcast(context, incUri)
+            views.setOnClickPendingIntent(R.id.widget_increment_area, incIntent)
             
-            for (i in 0..6) {
-                val miles = prefs.getInt("day_${i}_miles", 0)
-                
-                // DAY LABEL
-                val decId = context.resources.getIdentifier("btn_dec_$i", "id", context.packageName)
-                if (decId != 0) {
-                    views.setTextViewText(decId, dayLabels[i])
-                    val decUri = Uri.parse("hybridlog://decrement_day?dayIndex=$i&ts=${System.currentTimeMillis()}")
-                    val decIntent = HomeWidgetBackgroundIntent.getBroadcast(context, decUri)
-                    views.setOnClickPendingIntent(decId, decIntent)
-                }
-
-                // BLOCKS
-                val incId = context.resources.getIdentifier("btn_inc_$i", "id", context.packageName)
-                if (incId != 0) {
-                    val blocks = StringBuilder()
-                    for (b in 0 until miles) blocks.append("█ ")
-                    if (blocks.isEmpty()) blocks.append("  ")
-                    views.setTextViewText(incId, blocks.toString())
-                    
-                    val incUri = Uri.parse("hybridlog://increment_day?dayIndex=$i&ts=${System.currentTimeMillis()}")
-                    val incIntent = HomeWidgetBackgroundIntent.getBroadcast(context, incUri)
-                    views.setOnClickPendingIntent(incId, incIntent)
-                }
-
-                // MILEAGE TEXT
-                val milesTextId = context.resources.getIdentifier("text_miles_$i", "id", context.packageName)
-                if (milesTextId != 0) {
-                    if (miles > 0) {
-                        views.setTextViewText(milesTextId, "$miles mi")
-                        views.setViewVisibility(milesTextId, View.VISIBLE)
-                    } else {
-                        views.setViewVisibility(milesTextId, View.GONE)
-                    }
-                }
-            }
+            // Set data
+            views.setTextViewText(R.id.day_title, dayLabelsFull[dayOfWeek])
+            views.setTextViewText(R.id.today_miles, "$todayMiles")
             
-            // Push update specifically to this ID
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        
-        // When receiving ANY action, refresh ALL instances immediately
         val manager = AppWidgetManager.getInstance(context)
         val component = ComponentName(context, RunningWidgetProvider::class.java)
         val ids = manager.getAppWidgetIds(component)
         val prefs = context.getSharedPreferences("HomeWidgetPreferences", Context.MODE_PRIVATE)
-        
         onUpdate(context, manager, ids, prefs)
     }
 }
