@@ -11,6 +11,7 @@ import '../services/data_backup_service.dart';
 import '../services/theme_service.dart';
 import '../widgets/theme_picker_widget.dart';
 import '../main.dart';
+import '../services/tutorial_service.dart';
 
 class RunningScreen extends StatefulWidget {
   final VoidCallback? onNavigateToWorkout;
@@ -28,12 +29,37 @@ class _RunningScreenState extends State<RunningScreen> {
   bool _isWeatherLoading = true;
   String? _manualCity;
 
+
+  final GlobalKey _runningGraphKey = GlobalKey();
+  final GlobalKey _swipeNavKey = GlobalKey();
+  final GlobalKey _settingsKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
     _calculateYearlyTotal();
     _loadWeather();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkTutorial();
+    });
   }
+
+  Future<void> _checkTutorial() async {
+    bool hasSeen = await TutorialService.hasSeenTutorial();
+    if (!hasSeen && mounted) {
+      TutorialService.showMainTutorial(
+        context: context,
+        runningGraphKey: _runningGraphKey,
+        settingsKey: _settingsKey,
+        swipeNavKey: _swipeNavKey,
+        onFinish: () async {
+          await TutorialService.markTutorialSeen();
+        }
+      );
+    }
+  }
+
 
   void _showSettingsDialog() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -92,7 +118,19 @@ class _RunningScreenState extends State<RunningScreen> {
                 },
               ),
               const Divider(color: Colors.black12),
+
+              const Divider(color: Colors.black12),
+              ListTile(
+                leading: const Icon(Icons.school, color: Colors.grey),
+                title: Text('Replay Tutorial', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await TutorialService.resetTutorial();
+                  _checkTutorial();
+                },
+              ),
               const ThemePickerWidget(),
+
             ],
           ),
         ),
@@ -245,7 +283,7 @@ class _RunningScreenState extends State<RunningScreen> {
                               padding: const EdgeInsets.only(right: 8.0),
                               child: SpringyButton(
                                 onTap: widget.onNavigateToWorkout,
-                                child: const Icon(Icons.chevron_right, color: Colors.grey, size: 28),
+                                child: Container(key: _swipeNavKey, child: const Icon(Icons.chevron_right, color: Colors.grey, size: 28)),
                               ),
                             ),
                           Text(
@@ -253,7 +291,7 @@ class _RunningScreenState extends State<RunningScreen> {
                             style: TextStyle(color: isDark ? Colors.white : Colors.black, fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5),
                           ),
                           const SizedBox(width: 8),
-                          SpringyButton(onTap: _showSettingsDialog, child: Icon(Icons.settings, color: isDark ? Colors.grey : Colors.black54, size: 22)),
+                          SpringyButton(onTap: _showSettingsDialog, child: Container(key: _settingsKey, child: Icon(Icons.settings, color: isDark ? Colors.grey : Colors.black54, size: 22))),
                         ],
                       ),
                       GestureDetector(
@@ -279,12 +317,15 @@ class _RunningScreenState extends State<RunningScreen> {
                   
                   LegoPop(
                     index: 0,
-                    child: RunningBlockGraph(
+                    child: Container(
+                      key: _runningGraphKey,
+                      child: RunningBlockGraph(
                       dbService: DatabaseService(),
                       onChanged: () => _calculateYearlyTotal(),
                       onInteractionChanged: (isInteracting) {
                         setState(() => _isGraphInteracting = isInteracting);
                       },
+                    ),
                     ),
                   ),
                   
