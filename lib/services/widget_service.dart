@@ -44,10 +44,10 @@ class WidgetService {
         theme = themeService.activeTheme;
       }
 
-      await HomeWidget.saveWidgetData<int>('theme_background', theme.background.value);
-      await HomeWidget.saveWidgetData<int>('theme_accent', theme.accent.value);
-      await HomeWidget.saveWidgetData<int>('theme_text', theme.text.value);
-      await HomeWidget.saveWidgetData<int>('theme_subText', theme.subText.value);
+      await HomeWidget.saveWidgetData<String>('theme_bg_hex', '#${theme.background.value.toRadixString(16).padLeft(8, '0')}');
+      await HomeWidget.saveWidgetData<String>('theme_accent_hex', '#${theme.accent.value.toRadixString(16).padLeft(8, '0')}');
+      await HomeWidget.saveWidgetData<String>('theme_text_hex', '#${theme.text.value.toRadixString(16).padLeft(8, '0')}');
+      await HomeWidget.saveWidgetData<String>('theme_subText_hex', '#${theme.subText.value.toRadixString(16).padLeft(8, '0')}');
 
       // SAVE RAW DATA TO HOME WIDGET
       debugPrint('Pushing to Widget: Total=$total, Weekly=$weeklyBlocks');

@@ -31,11 +31,11 @@ class RunningWidgetProvider : HomeWidgetProvider() {
         
         val todayMiles = prefs.getInt("day_${dayOfWeek}_miles", 0)
         
-        // Theme Colors
-        val bgColor = prefs.getInt("theme_background", Color.parseColor("#120E15"))
-        val accentColor = prefs.getInt("theme_accent", Color.parseColor("#D93846"))
-        val textColor = prefs.getInt("theme_text", Color.parseColor("#AAAAAA"))
-        val subTextColor = prefs.getInt("theme_subText", Color.parseColor("#888888"))
+        // Theme Colors (Safely parsed from Hex Strings)
+        val bgColor = try { Color.parseColor(prefs.getString("theme_bg_hex", "#120E15")) } catch (e: Exception) { Color.parseColor("#120E15") }
+        val accentColor = try { Color.parseColor(prefs.getString("theme_accent_hex", "#D93846")) } catch (e: Exception) { Color.parseColor("#D93846") }
+        val textColor = try { Color.parseColor(prefs.getString("theme_text_hex", "#AAAAAA")) } catch (e: Exception) { Color.parseColor("#AAAAAA") }
+        val subTextColor = try { Color.parseColor(prefs.getString("theme_subText_hex", "#888888")) } catch (e: Exception) { Color.parseColor("#888888") }
 
         val dayLabelsFull = arrayOf("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY")
 
@@ -61,14 +61,11 @@ class RunningWidgetProvider : HomeWidgetProvider() {
             // INCREMENT INTENT (Optimistic update via native side first)
             val customIncIntent = Intent(context, RunningWidgetProvider::class.java).apply {
                 action = "INCREMENT_TALLY"
-                data = Uri.parse("hybridlog://native_increment?dayOfWeek=$dayOfWeek&ts=${System.currentTimeMillis()}")
                 putExtra("dayOfWeek", dayOfWeek)
             }
-            // Use a unique request code by casting the current time to Int to ensure uniqueness alongside the URI
-            val uniqueId = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
             val pendingCustomIncIntent = PendingIntent.getBroadcast(
                 context,
-                uniqueId,
+                0,
                 customIncIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
