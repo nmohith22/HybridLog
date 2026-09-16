@@ -42,10 +42,18 @@ class RunningWidgetProvider : HomeWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.day_title, pendingLaunchIntent)
 
-            // INCREMENT INTENT (on the entire widget root or a big button)
-            val incUri = Uri.parse("hybridlog://increment_day?dayIndex=$dayOfWeek&ts=${System.currentTimeMillis()}")
-            val incIntent = HomeWidgetBackgroundIntent.getBroadcast(context, incUri)
-            views.setOnClickPendingIntent(R.id.widget_increment_area, incIntent)
+            // INCREMENT INTENT (Optimistic update via native side first)
+            val customIncIntent = Intent(context, RunningWidgetProvider::class.java).apply {
+                action = "INCREMENT_TALLY"
+                putExtra("dayOfWeek", dayOfWeek)
+            }
+            val pendingCustomIncIntent = PendingIntent.getBroadcast(
+                context,
+                0,
+                customIncIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.widget_increment_area, pendingCustomIncIntent)
             
             // Set data
             views.setTextViewText(R.id.day_title, dayLabelsFull[dayOfWeek])
@@ -61,6 +69,29 @@ class RunningWidgetProvider : HomeWidgetProvider() {
         val component = ComponentName(context, RunningWidgetProvider::class.java)
         val ids = manager.getAppWidgetIds(component)
         val prefs = context.getSharedPreferences("HomeWidgetPreferences", Context.MODE_PRIVATE)
-        onUpdate(context, manager, ids, prefs)
+
+        if (intent.action == "INCREMENT_TALLY") {
+            val dayOfWeek = intent.getIntExtra("dayOfWeek", -1)
+            if (dayOfWeek != -1) {
+                // Optimistic UI Update
+                val currentMiles = prefs.getInt("day_${dayOfWeek}_miles", 0)
+                prefs.edit().putInt("day_${dayOfWeek}_miles", currentMiles + 1).apply()
+                
+                // Re-render instantly with the new value
+                onUpdate(context, manager, ids, prefs)
+                
+                // Forward the background intent to Flutter to persist the data
+                val incUri = Uri.parse("hybridlog://increment_day?dayIndex=$dayOfWeek&ts=${System.currentTimeMillis()}")
+                val flutterPendingIntent = HomeWidgetBackgroundIntent.getBroadcast(context, incUri)
+                try {
+                    flutterPendingIntent.send()
+                } catch (e: PendingIntent.CanceledException) {
+                    Log.e("RunningWidget", "Failed to forward intent to flutter", e)
+                }
+            }
+        } else {
+            // Normal widget updates (e.g. from Flutter push or system)
+            onUpdate(context, manager, ids, prefs)
+        }
     }
 }
