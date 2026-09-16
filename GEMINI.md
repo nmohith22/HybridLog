@@ -28,7 +28,7 @@ A senior-engineered, high-performance fitness tracking application built with Fl
 ### 1. Widget Redesign
 - **Tally Counter Layout:** Replaced the 7-day week view with a compact 2x2 daily tally counter focusing on today's miles.
 - **Optimistic UI Updates:** Shifted widget tap handling to the native Kotlin layer (`RunningWidgetProvider`) to instantly increment the counter and redraw the UI in 0ms, bypassing the Flutter background start delay. The click is then forwarded to Flutter silently to persist in the Isar database.
-- **Theme Inheritance:** The widget now dynamically inherits its background, text, and accent colors from the active theme chosen inside the main app.
+- **Theme Inheritance:** The widget now dynamically inherits its background, text, and accent colors from the active theme chosen inside the main app. Colors are passed as hex strings (`#FF...`) rather than integers to prevent Android `ClassCastException` crashes when reading 64-bit Dart values from SharedPreferences.
 - **Lifecycle Refresh:** Integrated `WidgetsBindingObserver` into the main app lifecycle to automatically push updates to the widget when the user closes or backgrounds the app.
 - **Manual Refresh:** Added a small refresh icon to the widget that triggers a direct database fetch without incrementing the tally.
 
