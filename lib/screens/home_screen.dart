@@ -14,6 +14,7 @@ import '../widgets/lego_animations.dart';
 import 'exercise_history_screen.dart';
 import '../ml/recommendation_engine.dart';
 import '../services/recovery_predictor.dart';
+import '../services/tutorial_service.dart';
 
 // --- HELPER: MARQUEE TEXT ---
 class MarqueeText extends StatefulWidget {
@@ -134,12 +135,27 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   Color get cardPurple => ThemeService().getResolvedTheme(context).card;
   Color get accentRed => ThemeService().getResolvedTheme(context).accent;
 
+  final GlobalKey _createFolderKey = GlobalKey();
+  final GlobalKey _exerciseCardKey = GlobalKey();
+  final GlobalKey _appDrawerKey = GlobalKey();
+  final GlobalKey _historyTabKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this); 
+    _sheetController.addListener(() { 
+      if (mounted) {
+        setState(() => _sheetSize = _sheetController.size); 
+      }
+    });
+
+    TutorialService.createFolderKey = _createFolderKey;
+    TutorialService.exerciseCardKey = _exerciseCardKey;
+    TutorialService.appDrawerKey = _appDrawerKey;
+    TutorialService.historyTabKey = _historyTabKey;
+
     _initializeData();
-    _sheetController.addListener(() { if (mounted) setState(() => _sheetSize = _sheetController.size); });
     _mainScrollController.addListener(() { if (mounted) setState(() {}); });
     _libraryScrollController.addListener(() { if (mounted) setState(() {}); });
   }
@@ -598,10 +614,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     final secondaryTextColor = isDark ? Colors.grey[400] : Colors.grey[600];
     final previewBg = isDark ? bgDarkPurple.withOpacity(0.5) : Colors.grey[100];
 
-    final cardContent = SpringyButton(
-      onTap: onTap ?? () => _openLoggingSheet(ex),
-      onLongPress: () => _showFolderAssignmentDialog(ex),
-      child: Container(
+    final cardContent = KeyedSubtree(
+      key: index == 0 ? _exerciseCardKey : null,
+      child: SpringyButton(
+        onTap: onTap ?? () => _openLoggingSheet(ex),
+        onLongPress: () => _showFolderAssignmentDialog(ex),
+        child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         padding: const EdgeInsets.only(right: 16),
         height: 100,
@@ -689,7 +707,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ],
         ),
       ),
-    );
+    ));
 
     if (index != null && scrollOffset != null && viewportHeight != null) {
       return ScalingCard(
@@ -1529,9 +1547,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Text('FAVORITES', style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.0)), 
             Row(children: [
-              SpringyButton(onTap: _showAIGeneratorDialog, child: Icon(Icons.auto_awesome, color: accentRed, size: 20)),
-              const SizedBox(width: 16),
-              SpringyButton(onTap: _showCreateFolderDialog, child: Icon(Icons.create_new_folder, color: isDark ? Colors.grey : Colors.black54, size: 20)),
+              IconButton(onPressed: _showAIGeneratorDialog, icon: Icon(Icons.auto_awesome, color: accentRed, size: 24)),
+              IconButton(key: _createFolderKey, onPressed: _showCreateFolderDialog, icon: Icon(Icons.create_new_folder, color: isDark ? Colors.grey : Colors.black54, size: 24)),
             ])
           ]))),
           _buildMainScreenFavorites(so, vh),
@@ -1548,9 +1565,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05), width: 1)
               ),
               child: ListView(controller: scrollController, padding: EdgeInsets.zero, physics: const ClampingScrollPhysics(), children: [
-                GestureDetector(onTap: () { if (_sheetSize < 0.5) _sheetController.animateTo(0.95, duration: const Duration(milliseconds: 300), curve: Curves.easeOut); else _sheetController.animateTo(0.05, duration: const Duration(milliseconds: 300), curve: Curves.easeIn); }, child: Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 8), color: Colors.transparent, child: Center(child: AnimatedRotation(duration: const Duration(milliseconds: 200), turns: _sheetSize > 0.5 ? 0.5 : 0.0, child: Icon(Icons.keyboard_arrow_up, color: isDark ? Colors.grey : Colors.black45, size: 24))))),
+                GestureDetector(key: _appDrawerKey, onTap: () { if (_sheetSize < 0.5) _sheetController.animateTo(0.95, duration: const Duration(milliseconds: 300), curve: Curves.easeOut); else _sheetController.animateTo(0.05, duration: const Duration(milliseconds: 300), curve: Curves.easeIn); }, child: Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 8), color: Colors.transparent, child: Center(child: AnimatedRotation(duration: const Duration(milliseconds: 200), turns: _sheetSize > 0.5 ? 0.5 : 0.0, child: Icon(Icons.keyboard_arrow_up, color: isDark ? Colors.grey : Colors.black45, size: 24))))),
                 if (_sheetSize > 0.15) ...[
-                  TabBar(controller: _tabController, indicatorColor: accentRed, labelColor: accentRed, unselectedLabelColor: isDark ? Colors.grey[700] : Colors.grey[400], dividerColor: Colors.transparent, indicatorWeight: 3, tabs: const [Tab(icon: Icon(Icons.fitness_center, size: 28)), Tab(icon: Icon(Icons.history, size: 28))]),
+                  TabBar(controller: _tabController, indicatorColor: accentRed, labelColor: accentRed, unselectedLabelColor: isDark ? Colors.grey[700] : Colors.grey[400], dividerColor: Colors.transparent, indicatorWeight: 3, tabs: [const Tab(icon: Icon(Icons.fitness_center, size: 28)), Tab(key: _historyTabKey, icon: const Icon(Icons.history, size: 28))]),
                   const SizedBox(height: 8),
                   SizedBox(height: MediaQuery.of(context).size.height * 0.8, child: TabBarView(controller: _tabController, children: [_buildAllExercisesTab(scrollController), _buildHistoryTab(scrollController)])),
                 ],
@@ -1689,9 +1706,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   void _showAIGeneratorDialog() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    String selectedSplit = 'Fullbody';
-    double varietyScore = 0.5;
+    List<String> selectedSplits = ['Fullbody'];
+    bool onlyFamiliar = true;
     bool isGenerating = false;
+    
+    final splitOptions = [
+      'Push', 'Pull', 'Legs', 'Upper', 'Lower', 'Fullbody',
+      'Shoulders', 'Arms', 'Shoulders and Arms', 'Back', 'Chest',
+      'Chest and Back', 'Posterior', 'Anterior'
+    ];
     
     showDialog(
       context: context,
@@ -1717,30 +1740,59 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("Split Preference", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 12, fontWeight: FontWeight.bold)),
+                  Text("Split Preference (Multi-Select)", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 12, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  DropdownButton<String>(
-                    value: selectedSplit,
-                    isExpanded: true,
-                    dropdownColor: isDark ? bgDarkPurple : Colors.white,
-                    style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-                    items: ['Push', 'Pull', 'Legs', 'Upper', 'Lower', 'Fullbody'].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-                    onChanged: (v) => setModalState(() => selectedSplit = v!),
+                  Wrap(
+                    spacing: 8.0,
+                    runSpacing: 4.0,
+                    children: splitOptions.map((s) {
+                      final isSelected = selectedSplits.contains(s);
+                      return FilterChip(
+                        label: Text(
+                          s,
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : (isDark ? Colors.grey[300] : Colors.black87),
+                            fontSize: 12,
+                          ),
+                        ),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          setModalState(() {
+                            if (s == 'Fullbody') {
+                              if (selected) {
+                                selectedSplits = ['Fullbody'];
+                              } else {
+                                selectedSplits.remove('Fullbody');
+                              }
+                            } else {
+                              if (selected) {
+                                selectedSplits.remove('Fullbody');
+                                selectedSplits.add(s);
+                              } else {
+                                selectedSplits.remove(s);
+                              }
+                            }
+                          });
+                        },
+                        selectedColor: accentRed,
+                        backgroundColor: isDark ? bgDarkPurple : Colors.grey[100],
+                        checkmarkColor: Colors.white,
+                        showCheckmark: false,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      );
+                    }).toList(),
                   ),
                   const SizedBox(height: 24),
-                  Text("Variety vs Familiarity", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 12, fontWeight: FontWeight.bold)),
-                  Slider(
-                    value: varietyScore,
+                  Text("Exercise Selection", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 12, fontWeight: FontWeight.bold)),
+                  SwitchListTile(
+                    title: Text(onlyFamiliar ? "Only Familiar Exercises" : "Include New Exercises", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14)),
+                    subtitle: Text(onlyFamiliar ? "Limits to exercises you've done before." : "Explores unfamiliar exercises.", style: TextStyle(color: Colors.grey, fontSize: 11)),
+                    value: !onlyFamiliar,
                     activeColor: accentRed,
-                    inactiveColor: isDark ? Colors.white10 : Colors.black12,
-                    onChanged: (v) => setModalState(() => varietyScore = v),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text("Familiar", style: TextStyle(color: Colors.grey, fontSize: 10)),
-                      Text("Surprise Me", style: TextStyle(color: Colors.grey, fontSize: 10)),
-                    ]
+                    contentPadding: EdgeInsets.zero,
+                    onChanged: (val) {
+                      setModalState(() => onlyFamiliar = !val);
+                    },
                   ),
                 ],
               ),
@@ -1749,6 +1801,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               if (!isGenerating) TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel", style: TextStyle(color: Colors.grey))),
               if (!isGenerating) TextButton(
                 onPressed: () async {
+                  if (selectedSplits.isEmpty) return;
                   setModalState(() => isGenerating = true);
                   
                   // Run neural network generation
@@ -1761,15 +1814,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   final generated = await RecommendationEngine.generateWorkout(
                     allExercises: allEx,
                     currentFatigue: _muscleIntensities,
-                    splitType: selectedSplit,
-                    varietyPreference: varietyScore,
+                    splitTypes: selectedSplits,
+                    onlyFamiliar: onlyFamiliar,
                   );
                   
                   // Create folder
-                  final folderName = "AI: $selectedSplit (${DateTime.now().month}/${DateTime.now().day})";
+                  String splitLabel = selectedSplits.length > 2 
+                      ? "Custom" 
+                      : selectedSplits.take(2).join(', ');
+                  final folderName = "AI: $splitLabel (${DateTime.now().month}/${DateTime.now().day})";
+                  
                   await db.writeTxn(() async {
-                    final f = WorkoutFolder()..name = folderName;
-                    await db.workoutFolders.put(f);
+                    final existingFolder = await db.workoutFolders.filter().nameEqualTo(folderName).findFirst();
+                    if (existingFolder == null) {
+                      final f = WorkoutFolder()..name = folderName;
+                      await db.workoutFolders.put(f);
+                    }
                     for (var ex in generated) {
                       if (!ex.folderNames.contains(folderName)) {
                         ex.folderNames = List.from(ex.folderNames)..add(folderName);
@@ -1786,7 +1846,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Generated $folderName!')));
                   }
                 }, 
-                child: Text("Generate", style: TextStyle(color: accentRed, fontWeight: FontWeight.bold)),
+                child: Text("Generate", style: TextStyle(color: selectedSplits.isEmpty ? Colors.grey : accentRed, fontWeight: FontWeight.bold)),
               ),
             ],
           );
@@ -1804,8 +1864,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         if (!snapshot.hasData) return const SliverToBoxAdapter(child: Center(child: CircularProgressIndicator()));
         
         final grouped = snapshot.data!;
-        final folders = grouped.keys.toList()
-          ..sort((a, b) => a == "Uncategorized" ? 1 : (b == "Uncategorized" ? -1 : a.compareTo(b)));
+        final folders = grouped.keys.toList()..sort();
 
         if (folders.isEmpty) {
           return SliverToBoxAdapter(
@@ -1831,8 +1890,19 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   child: ExpansionTile(
                     initiallyExpanded: false,
                     backgroundColor: isDark ? Colors.transparent : Colors.grey[50],
-                    leading: Icon(folder == "Uncategorized" ? Icons.folder_open : Icons.folder, color: accentRed.withOpacity(0.5), size: 20),
-                    title: Text(folder.toUpperCase(), style: TextStyle(color: accentRed, fontWeight: FontWeight.bold, letterSpacing: 1.2, fontSize: 13)),
+                    leading: Icon(Icons.folder, color: accentRed.withOpacity(0.5), size: 20),
+                    title: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(child: Text(folder.toUpperCase(), style: TextStyle(color: accentRed, fontWeight: FontWeight.bold, letterSpacing: 1.2, fontSize: 13))),
+                        IconButton(
+                          icon: Icon(Icons.delete_outline, size: 18, color: Colors.grey),
+                          onPressed: () => _deleteFolder(folder),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      ],
+                    ),
                     children: exercises.isEmpty 
                       ? [Padding(padding: const EdgeInsets.all(16.0), child: Text("Empty Folder. Long-press an exercise to move it here.", style: TextStyle(color: Colors.grey[800], fontSize: 11, fontStyle: FontStyle.italic)))]
                       : exercises.map((ex) => _buildExerciseCard(
@@ -1853,6 +1923,42 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
+  void _deleteFolder(String folderName) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E2C) : Colors.white,
+        title: Text("Delete Folder?"),
+        content: Text("Are you sure you want to delete '$folderName'? Exercises inside will not be deleted, but they will be removed from this folder."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel", style: TextStyle(color: Colors.grey))),
+          TextButton(
+            onPressed: () async {
+              final db = await DatabaseService().database;
+              await db.writeTxn(() async {
+                await db.workoutFolders.filter().nameEqualTo(folderName).deleteAll();
+                final exercisesInFolder = await db.exercises.filter().folderNamesElementEqualTo(folderName).findAll();
+                for (var ex in exercisesInFolder) {
+                  ex.folderNames = List.from(ex.folderNames)..remove(folderName);
+                  ex.folderName = ex.folderNames.isNotEmpty ? ex.folderNames.first : null;
+                  if (ex.folderNames.isEmpty) {
+                    ex.isFavorite = false; // Optionally unfavorite if no folders remain
+                  }
+                  await db.exercises.put(ex);
+                }
+              });
+              if (mounted) {
+                Navigator.pop(context);
+                _refreshData();
+              }
+            }, 
+            child: const Text("Delete", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))
+          ),
+        ]
+      )
+    );
+  }
+
   Future<Map<String, List<Exercise>>> _loadGroupedFavorites() async {
     final db = await DatabaseService().database;
     final folders = await db.workoutFolders.where().sortByName().findAll();
@@ -1860,9 +1966,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     
     Map<String, List<Exercise>> grouped = {for (var f in folders) f.name: []};
     for (var ex in favorites) {
-      if (ex.folderNames.isEmpty) {
-        grouped.putIfAbsent("Uncategorized", () => []).add(ex);
-      } else {
+      if (ex.folderNames.isNotEmpty) {
         for (var folderName in ex.folderNames) {
           grouped.putIfAbsent(folderName, () => []).add(ex);
         }

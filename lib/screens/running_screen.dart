@@ -31,6 +31,7 @@ class _RunningScreenState extends State<RunningScreen> {
 
 
   final GlobalKey _runningGraphKey = GlobalKey();
+  final GlobalKey _runningYearlyHistoryKey = GlobalKey();
   final GlobalKey _swipeNavKey = GlobalKey();
   final GlobalKey _settingsKey = GlobalKey();
 
@@ -51,10 +52,32 @@ class _RunningScreenState extends State<RunningScreen> {
       TutorialService.showMainTutorial(
         context: context,
         runningGraphKey: _runningGraphKey,
+        runningYearlyHistoryKey: _runningYearlyHistoryKey,
         settingsKey: _settingsKey,
         swipeNavKey: _swipeNavKey,
+        onNavigateToWorkout: widget.onNavigateToWorkout ?? () {},
         onFinish: () async {
           await TutorialService.markTutorialSeen();
+          if (widget.onNavigateToWorkout != null) {
+            widget.onNavigateToWorkout!();
+            Future.delayed(const Duration(milliseconds: 600), () async {
+              if (TutorialService.createFolderKey?.currentContext != null) {
+                bool hasSeenWorkout = await TutorialService.hasSeenWorkoutTutorial();
+                if (!hasSeenWorkout) {
+                  TutorialService.showWorkoutTutorial(
+                    context: TutorialService.createFolderKey!.currentContext!,
+                    createFolderKey: TutorialService.createFolderKey!,
+                    exerciseCardKey: TutorialService.exerciseCardKey!,
+                    appDrawerKey: TutorialService.appDrawerKey!,
+                    historyTabKey: TutorialService.historyTabKey!,
+                    onFinish: () async {
+                      await TutorialService.markWorkoutTutorialSeen();
+                    }
+                  );
+                }
+              }
+            });
+          }
         }
       );
     }
@@ -345,15 +368,18 @@ class _RunningScreenState extends State<RunningScreen> {
                   
                   LegoPop(
                     index: 2,
-                    child: YearlyHeatmapCalendar(
-                      dbService: DatabaseService(),
-                      selectedYear: _selectedYear,
-                      onYearChanged: (year) {
-                        setState(() {
-                          _selectedYear = year;
-                        });
-                        _calculateYearlyTotal();
-                      },
+                    child: Container(
+                      key: _runningYearlyHistoryKey,
+                      child: YearlyHeatmapCalendar(
+                        dbService: DatabaseService(),
+                        selectedYear: _selectedYear,
+                        onYearChanged: (year) {
+                          setState(() {
+                            _selectedYear = year;
+                          });
+                          _calculateYearlyTotal();
+                        },
+                      ),
                     ),
                   ),
                   const SizedBox(height: 40), 

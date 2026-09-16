@@ -11,14 +11,22 @@ class RecommendationEngine {
     'Upper': ['chest', 'front_deltoids', 'side_deltoids', 'triceps', 'lats', 'upper_back', 'traps', 'back_deltoids', 'biceps', 'lower_back'],
     'Lower': ['quads', 'hamstrings', 'glutes', 'calves', 'adductors'],
     'Fullbody': [], // Special case, all match
+    'Shoulders': ['front_deltoids', 'side_deltoids', 'back_deltoids'],
+    'Arms': ['biceps', 'bicep_short_head', 'bicep_long_head', 'triceps', 'tricep_long_head', 'forearm'],
+    'Shoulders and Arms': ['front_deltoids', 'side_deltoids', 'back_deltoids', 'biceps', 'bicep_short_head', 'bicep_long_head', 'triceps', 'tricep_long_head', 'forearm'],
+    'Back': ['lats', 'upper_back', 'traps', 'back_deltoids', 'lower_back'],
+    'Chest': ['chest'],
+    'Chest and Back': ['chest', 'lats', 'upper_back', 'traps', 'back_deltoids', 'lower_back'],
+    'Posterior': ['lats', 'upper_back', 'traps', 'back_deltoids', 'lower_back', 'glutes', 'hamstrings', 'calves'],
+    'Anterior': ['chest', 'abs', 'obliques', 'front_deltoids', 'side_deltoids', 'biceps', 'quads'],
   };
 
   /// Main entry point to build a custom folder
   static Future<List<Exercise>> generateWorkout({
     required List<Exercise> allExercises,
     required Map<String, double> currentFatigue,
-    required String splitType,
-    required double varietyPreference, // 0.0 (Familiar) to 1.0 (Surprise Me)
+    required List<String> splitTypes,
+    required bool onlyFamiliar,
   }) async {
     // 1. Prepare the Neural Network (3 inputs -> 4 hidden -> 1 output)
     final nn = NeuralNetwork([3, 4, 1]);
@@ -31,8 +39,8 @@ class RecommendationEngine {
 
     // Rule 1: Perfect Match (Fits split, not fatigued, familiar) -> Highly Recommended
     trainingData.add([1.0, 0.0, 1.0]); targets.add([1.0]);
-    // Rule 2: Good Match (Fits split, not fatigued, unfamiliar) -> Depends on variety
-    trainingData.add([1.0, 0.0, 0.0]); targets.add([0.3 + (varietyPreference * 0.7)]);
+    // Rule 2: Good Match (Fits split, not fatigued, unfamiliar)
+    trainingData.add([1.0, 0.0, 0.0]); targets.add([onlyFamiliar ? 0.0 : 0.8]);
     // Rule 3: Fatigued (Fits split, highly fatigued, familiar) -> Avoid
     trainingData.add([1.0, 1.0, 1.0]); targets.add([0.1]);
     // Rule 4: Wrong Split (Doesn't fit split, not fatigued, familiar) -> Avoid completely
@@ -52,7 +60,11 @@ class RecommendationEngine {
     List<Map<String, dynamic>> scoredExercises = [];
 
     for (var ex in allExercises) {
-      double splitMatch = _calculateSplitMatch(ex, splitType);
+      if (onlyFamiliar && !ex.isFavorite && ex.folderNames.isEmpty) {
+        continue; // Skip if strict familiar and it's new
+      }
+
+      double splitMatch = _calculateSplitMatch(ex, splitTypes);
       double fatiguePenalty = _calculateFatiguePenalty(ex, currentFatigue);
       double isFamiliar = ex.isFavorite ? 1.0 : (ex.folderNames.isNotEmpty ? 0.5 : 0.0);
 
@@ -60,8 +72,8 @@ class RecommendationEngine {
       List<double> prediction = nn.forward([splitMatch, fatiguePenalty, isFamiliar]);
       double score = prediction[0];
 
-      // Add a tiny bit of random noise to break ties, scaling with variety
-      final randomNoise = (Random().nextDouble() * 0.1) * varietyPreference;
+      // Add a tiny bit of random noise to break ties
+      final randomNoise = (Random().nextDouble() * 0.1);
       
       scoredExercises.add({
         'exercise': ex,
@@ -77,10 +89,14 @@ class RecommendationEngine {
     return scoredExercises.take(workoutSize).map((e) => e['exercise'] as Exercise).toList();
   }
 
-  static double _calculateSplitMatch(Exercise ex, String split) {
-    if (split == 'Fullbody') return 1.0;
+  static double _calculateSplitMatch(Exercise ex, List<String> splits) {
+    if (splits.contains('Fullbody') || splits.isEmpty) return 1.0;
     
-    final validMuscles = _splitDefinitions[split] ?? [];
+    List<String> validMuscles = [];
+    for (var split in splits) {
+      validMuscles.addAll(_splitDefinitions[split] ?? []);
+    }
+    
     List<String> allMuscles = [...ex.targetMuscles, ...ex.secondaryMuscles];
     if (allMuscles.isEmpty && ex.targetMuscle.isNotEmpty) allMuscles.add(ex.targetMuscle);
 
