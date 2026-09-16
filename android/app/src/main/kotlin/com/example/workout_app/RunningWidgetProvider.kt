@@ -47,7 +47,7 @@ class RunningWidgetProvider : HomeWidgetProvider() {
             views.setTextColor(R.id.today_miles, accentColor)
             views.setTextColor(R.id.day_title, textColor)
             views.setTextColor(R.id.miles_label, subTextColor)
-            views.setInt(R.id.widget_refresh, "setColorFilter", subTextColor)
+            // views.setInt(R.id.widget_refresh, "setColorFilter", subTextColor) // Removed to prevent ActionException on some Android versions
 
             // OPEN APP INTENT (on Title)
             val launchIntent = Intent(context, MainActivity::class.java).apply {
