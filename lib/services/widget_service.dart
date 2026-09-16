@@ -4,6 +4,8 @@ import 'database_service.dart';
 import '../models/fitness_schema.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:isar/isar.dart';
+import 'theme_service.dart';
+import 'dart:ui';
 
 class WidgetService {
   static const String _androidWidgetName = 'RunningWidgetProvider';
@@ -30,6 +32,22 @@ class WidgetService {
           total += miles;
         }
       }
+
+      // Sync Theme Colors
+      final themeService = ThemeService();
+      await themeService.init();
+      AppTheme theme;
+      if (themeService.currentThemeId == 'system') {
+        final brightness = PlatformDispatcher.instance.platformBrightness;
+        theme = themeService.themes.firstWhere((t) => t.id == (brightness == Brightness.dark ? 'dark' : 'light'));
+      } else {
+        theme = themeService.activeTheme;
+      }
+
+      await HomeWidget.saveWidgetData<int>('theme_background', theme.background.value);
+      await HomeWidget.saveWidgetData<int>('theme_accent', theme.accent.value);
+      await HomeWidget.saveWidgetData<int>('theme_text', theme.text.value);
+      await HomeWidget.saveWidgetData<int>('theme_subText', theme.subText.value);
 
       // SAVE RAW DATA TO HOME WIDGET
       debugPrint('Pushing to Widget: Total=$total, Weekly=$weeklyBlocks');
@@ -58,6 +76,11 @@ class WidgetService {
     if (uri == null) return;
     
     try {
+      if (uri.host == 'refresh_widget') {
+        await updateRunningWidget();
+        return;
+      }
+
       final db = await DatabaseService().database;
       final dayIndexString = uri.queryParameters['dayIndex'];
       debugPrint('Day Index String: $dayIndexString');

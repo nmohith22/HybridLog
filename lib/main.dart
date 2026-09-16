@@ -57,17 +57,28 @@ class WorkoutApp extends StatefulWidget {
   State<WorkoutApp> createState() => _WorkoutAppState();
 }
 
-class _WorkoutAppState extends State<WorkoutApp> {
+class _WorkoutAppState extends State<WorkoutApp> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
     ThemeService().addListener(_onThemeChanged);
+    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     ThemeService().removeListener(_onThemeChanged);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      if (!kIsWeb) {
+        WidgetService.updateRunningWidget().catchError((e) => debugPrint('Lifecycle widget update failed: $e'));
+      }
+    }
   }
 
   void _onThemeChanged() {

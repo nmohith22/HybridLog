@@ -6,6 +6,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.graphics.Color
 import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetProvider
@@ -19,20 +20,35 @@ class RunningWidgetProvider : HomeWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray, widgetData: SharedPreferences) {
         val prefs = context.getSharedPreferences("HomeWidgetPreferences", Context.MODE_PRIVATE)
         
-        // Get today's day index (0 for Monday, 6 for Sunday) to match Dart logic
+        // Get today's day index and date string
         val calendar = Calendar.getInstance()
         var dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK) - 2
         if (dayOfWeek < 0) dayOfWeek += 7
         
+        val month = calendar.get(Calendar.MONTH) + 1
+        val day = calendar.get(Calendar.DAY_OF_MONTH)
+        val dateString = "$month/$day"
+        
         val todayMiles = prefs.getInt("day_${dayOfWeek}_miles", 0)
         
-        Log.e("RunningWidget", "Visual Sync Start. Today ($dayOfWeek): $todayMiles")
+        // Theme Colors
+        val bgColor = prefs.getInt("theme_background", Color.parseColor("#120E15"))
+        val accentColor = prefs.getInt("theme_accent", Color.parseColor("#D93846"))
+        val textColor = prefs.getInt("theme_text", Color.parseColor("#AAAAAA"))
+        val subTextColor = prefs.getInt("theme_subText", Color.parseColor("#888888"))
 
         val dayLabelsFull = arrayOf("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY")
 
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.running_widget_final)
             
+            // APPLY COLORS
+            views.setInt(R.id.widget_background, "setBackgroundColor", bgColor)
+            views.setTextColor(R.id.today_miles, accentColor)
+            views.setTextColor(R.id.day_title, textColor)
+            views.setTextColor(R.id.miles_label, subTextColor)
+            views.setInt(R.id.widget_refresh, "setColorFilter", subTextColor)
+
             // OPEN APP INTENT (on Title)
             val launchIntent = Intent(context, MainActivity::class.java).apply {
                 data = Uri.parse("hybridlog://open_app?ts=${System.currentTimeMillis()}")
@@ -55,8 +71,13 @@ class RunningWidgetProvider : HomeWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.widget_increment_area, pendingCustomIncIntent)
             
+            // REFRESH INTENT (On icon)
+            val refreshUri = Uri.parse("hybridlog://refresh_widget?ts=${System.currentTimeMillis()}")
+            val refreshIntent = HomeWidgetBackgroundIntent.getBroadcast(context, refreshUri)
+            views.setOnClickPendingIntent(R.id.widget_refresh, refreshIntent)
+            
             // Set data
-            views.setTextViewText(R.id.day_title, dayLabelsFull[dayOfWeek])
+            views.setTextViewText(R.id.day_title, "${dayLabelsFull[dayOfWeek]} $dateString")
             views.setTextViewText(R.id.today_miles, "$todayMiles")
             
             appWidgetManager.updateAppWidget(appWidgetId, views)
