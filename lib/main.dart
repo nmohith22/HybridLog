@@ -37,6 +37,7 @@ void main() async {
 // Background handler for widget interactions
 @pragma('vm:entry-point')
 Future<void> _backgroundCallback(Uri? uri) async {
+  WidgetsFlutterBinding.ensureInitialized();
   try {
     debugPrint('--- BACKGROUND CALLBACK TRIGGERED ---');
     debugPrint('URI: $uri');

@@ -33,15 +33,19 @@ class WidgetService {
         }
       }
 
-      // Sync Theme Colors
-      final themeService = ThemeService();
-      await themeService.init();
-      AppTheme theme;
-      if (themeService.currentThemeId == 'system') {
-        final brightness = PlatformDispatcher.instance.platformBrightness;
-        theme = themeService.themes.firstWhere((t) => t.id == (brightness == Brightness.dark ? 'dark' : 'light'));
-      } else {
-        theme = themeService.activeTheme;
+      // Sync Theme Colors (with fail-safe for headless isolate)
+      AppTheme theme = ThemeService().themes[0]; // fallback
+      try {
+        final themeService = ThemeService();
+        await themeService.init();
+        if (themeService.currentThemeId == 'system') {
+          final brightness = PlatformDispatcher.instance.platformBrightness;
+          theme = themeService.themes.firstWhere((t) => t.id == (brightness == Brightness.dark ? 'dark' : 'light'));
+        } else {
+          theme = themeService.activeTheme;
+        }
+      } catch (e) {
+        debugPrint('Theme fetch failed (likely headless isolate): $e');
       }
 
       await HomeWidget.saveWidgetData<String>('theme_bg_hex', '#${theme.background.value.toRadixString(16).padLeft(8, '0')}');
