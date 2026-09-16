@@ -61,22 +61,27 @@ class RunningWidgetProvider : HomeWidgetProvider() {
             // INCREMENT INTENT (Optimistic update via native side first)
             val customIncIntent = Intent(context, RunningWidgetProvider::class.java).apply {
                 action = "INCREMENT_TALLY"
-                data = Uri.parse("hybridlog://native_increment?dayOfWeek=$dayOfWeek&ts=${System.currentTimeMillis()}")
                 putExtra("dayOfWeek", dayOfWeek)
             }
-            val uniqueId = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
             val pendingCustomIncIntent = PendingIntent.getBroadcast(
                 context,
-                uniqueId,
+                0,
                 customIncIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             views.setOnClickPendingIntent(R.id.widget_increment_area, pendingCustomIncIntent)
             
-            // REFRESH INTENT (On icon)
-            val refreshUri = Uri.parse("hybridlog://refresh_widget?ts=${System.currentTimeMillis()}")
-            val refreshIntent = HomeWidgetBackgroundIntent.getBroadcast(context, refreshUri)
-            views.setOnClickPendingIntent(R.id.widget_refresh, refreshIntent)
+            // REFRESH INTENT (Intercepted by Kotlin first)
+            val customRefreshIntent = Intent(context, RunningWidgetProvider::class.java).apply {
+                action = "REFRESH_WIDGET"
+            }
+            val pendingCustomRefreshIntent = PendingIntent.getBroadcast(
+                context,
+                1,
+                customRefreshIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.widget_refresh, pendingCustomRefreshIntent)
             
             // Set data
             views.setTextViewText(R.id.day_title, "${dayLabelsFull[dayOfWeek]} $dateString")
@@ -111,6 +116,15 @@ class RunningWidgetProvider : HomeWidgetProvider() {
                 } catch (e: PendingIntent.CanceledException) {
                     Log.e("RunningWidget", "Failed to forward intent to flutter", e)
                 }
+            }
+        } else if (intent.action == "REFRESH_WIDGET") {
+            // Forward the refresh intent to Flutter
+            val refreshUri = Uri.parse("hybridlog://refresh_widget?ts=${System.currentTimeMillis()}")
+            val flutterPendingIntent = HomeWidgetBackgroundIntent.getBroadcast(context, refreshUri)
+            try {
+                flutterPendingIntent.send()
+            } catch (e: PendingIntent.CanceledException) {
+                Log.e("RunningWidget", "Failed to forward refresh intent to flutter", e)
             }
         } else {
             // Normal widget updates (e.g. from Flutter push or system)

@@ -60,9 +60,6 @@ class WidgetService {
         await HomeWidget.saveWidgetData<int>('day_${i}_miles', weeklyBlocks[i] ?? 0);
       }
 
-      // Moderate delay to ensure SharedPreferences has physically flushed to disk
-      await Future.delayed(const Duration(milliseconds: 300));
-
       // TRIGGER NATIVE UPDATE
       final res = await HomeWidget.updateWidget(
         name: _androidWidgetName,
