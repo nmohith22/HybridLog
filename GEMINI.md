@@ -24,6 +24,16 @@ A senior-engineered, high-performance fitness tracking application built with Fl
 - **Checkpoint-First:** When asked to "resume from the most recent chat" or "pick up where we left off," always check the **Checkpoint: May 3, 2026** section below. 
 - **Priority:** If the user chat history is newer than this checkpoint, prioritize the chat context. Otherwise, use this checkpoint as the ground truth for state.
 
+## Checkpoint: September 15, 2026 (On-Device ML & Neural Network)
+### 1. Neural Network Workout Generator
+- **Pure Dart MLP:** Implemented a lightweight Multi-Layer Perceptron from scratch in `lib/ml/neural_net.dart` (no TFLite or heavy dependencies).
+- **Heuristic Training:** The AI dynamically trains on-device via backpropagation on a synthesized dataset matching the user's split preference and current volume-load fatigue. It ranks library exercises and builds custom folders.
+- **UI:** Triggered by a sparkle icon (`auto_awesome`) on the Home Screen "FAVORITES" section.
+
+### 2. Recovery Predictor
+- **Math Model:** Added `lib/services/recovery_predictor.dart` to calculate exact time-to-recovery based on the existing linear decay function (10 days from 100% to 0%).
+- **UI:** Tapping the volume-load heatmap model pops open a dialog showing hours/days until fully recovered for the most heavily taxed muscles.
+
 ## Checkpoint: September 15, 2026 (Widget Tally Counter & Optimistic UI)
 ### 1. Widget Redesign
 - **Tally Counter Layout:** Replaced the 7-day week view with a compact 2x2 daily tally counter focusing on today's miles.

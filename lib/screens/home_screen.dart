@@ -12,6 +12,8 @@ import '../widgets/theme_picker_widget.dart';
 import '../main.dart';
 import '../widgets/lego_animations.dart';
 import 'exercise_history_screen.dart';
+import '../ml/recommendation_engine.dart';
+import '../services/recovery_predictor.dart';
 
 // --- HELPER: MARQUEE TEXT ---
 class MarqueeText extends StatefulWidget {
@@ -1526,7 +1528,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ])))),
           SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Text('FAVORITES', style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.0)), 
-            SpringyButton(onTap: _showCreateFolderDialog, child: Icon(Icons.create_new_folder, color: isDark ? Colors.grey : Colors.black54, size: 20)),
+            Row(children: [
+              SpringyButton(onTap: _showAIGeneratorDialog, child: Icon(Icons.auto_awesome, color: accentRed, size: 20)),
+              const SizedBox(width: 16),
+              SpringyButton(onTap: _showCreateFolderDialog, child: Icon(Icons.create_new_folder, color: isDark ? Colors.grey : Colors.black54, size: 20)),
+            ])
           ]))),
           _buildMainScreenFavorites(so, vh),
           const SliverToBoxAdapter(child: SizedBox(height: 150)),
@@ -1594,40 +1600,198 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ? ['chest', 'abs', 'obliques', 'front_deltoids', 'side_deltoids', 'biceps', 'bicep_long_head', 'bicep_short_head', 'quads']
       : ['lats', 'lower_back', 'traps', 'back_deltoids', 'triceps', 'tricep_long_head', 'glutes', 'hamstrings', 'calves'];
 
-    return Column(
-      children: [
-        SizedBox(
-          height: 180, // Slightly shorter to fit legend
-          width: 110,
-          child: Stack(
-            alignment: Alignment.center,
+    return GestureDetector(
+      onTap: _showRecoveryPredictorDialog,
+      child: Column(
+        children: [
+          SizedBox(
+            height: 180, // Slightly shorter to fit legend
+            width: 110,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Base Body
+                SvgPicture.asset(
+                  isFront ? 'assets/body_front_base.svg' : 'assets/body_back_base.svg',
+                  colorFilter: ColorFilter.mode(isDark ? cardPurple : Colors.grey[300]!, BlendMode.srcIn),
+                ),
+                // Muscle Layers
+                ...muscles.map((muscle) {
+                  final intensity = _muscleIntensities[muscle] ?? 0.0;
+                  if (intensity <= 0) return const SizedBox.shrink();
+                  
+                  // Map logical muscle name to asset path
+                  final assetName = isFront ? 'front_$muscle' : 'back_$muscle';
+                  return SvgPicture.asset(
+                    'assets/$assetName.svg',
+                    colorFilter: ColorFilter.mode(_getIntensityColor(intensity), BlendMode.srcIn),
+                  );
+                }),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            isFront ? "FRONT" : "BACK",
+            style: TextStyle(color: isDark ? Colors.grey[700] : Colors.grey[400], fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRecoveryPredictorDialog() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    // Sort muscles by fatigue
+    final sortedMuscles = _muscleIntensities.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+      
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? cardPurple : Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Base Body
-              SvgPicture.asset(
-                isFront ? 'assets/body_front_base.svg' : 'assets/body_back_base.svg',
-                colorFilter: ColorFilter.mode(isDark ? cardPurple : Colors.grey[300]!, BlendMode.srcIn),
-              ),
-              // Muscle Layers
-              ...muscles.map((muscle) {
-                final intensity = _muscleIntensities[muscle] ?? 0.0;
-                if (intensity <= 0) return const SizedBox.shrink();
-                
-                // Map logical muscle name to asset path
-                final assetName = isFront ? 'front_$muscle' : 'back_$muscle';
-                return SvgPicture.asset(
-                  'assets/$assetName.svg',
-                  colorFilter: ColorFilter.mode(_getIntensityColor(intensity), BlendMode.srcIn),
-                );
-              }),
+              Text("Recovery Predictor", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+              const SizedBox(height: 8),
+              Text("Estimated time until muscle groups are fully recovered.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 14)),
+              const SizedBox(height: 24),
+              if (sortedMuscles.isEmpty || sortedMuscles.every((m) => m.value < 0.1))
+                Center(child: Text("All muscles fully recovered!", style: TextStyle(color: accentRed, fontWeight: FontWeight.bold)))
+              else
+                ...sortedMuscles.take(6).map((entry) {
+                  final days = RecoveryPredictor.calculateDaysToRecovery(entry.value);
+                  final timeStr = RecoveryPredictor.formatRecoveryTime(days);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(entry.key.replaceAll('_', ' ').toUpperCase(), style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 14)),
+                        Text(timeStr, style: TextStyle(color: days > 0 ? accentRed : Colors.green, fontWeight: FontWeight.bold, fontSize: 14)),
+                      ],
+                    ),
+                  );
+                }),
+              const SizedBox(height: 16),
             ],
           ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          isFront ? "FRONT" : "BACK",
-          style: TextStyle(color: isDark ? Colors.grey[700] : Colors.grey[400], fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1.2),
-        ),
-      ],
+        );
+      },
+    );
+  }
+
+  void _showAIGeneratorDialog() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    String selectedSplit = 'Fullbody';
+    double varietyScore = 0.5;
+    bool isGenerating = false;
+    
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return AlertDialog(
+            backgroundColor: isDark ? cardPurple : Colors.white,
+            title: Row(
+              children: [
+                Icon(Icons.auto_awesome, color: accentRed),
+                const SizedBox(width: 8),
+                Text('AI Workout Generator', style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 18, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: isGenerating 
+              ? SizedBox(height: 150, child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text("Training Native Neural Network...", style: TextStyle(color: isDark ? Colors.grey : Colors.grey[700], fontSize: 12))
+                ])))
+              : SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Split Preference", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 12, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  DropdownButton<String>(
+                    value: selectedSplit,
+                    isExpanded: true,
+                    dropdownColor: isDark ? bgDarkPurple : Colors.white,
+                    style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+                    items: ['Push', 'Pull', 'Legs', 'Upper', 'Lower', 'Fullbody'].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                    onChanged: (v) => setModalState(() => selectedSplit = v!),
+                  ),
+                  const SizedBox(height: 24),
+                  Text("Variety vs Familiarity", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 12, fontWeight: FontWeight.bold)),
+                  Slider(
+                    value: varietyScore,
+                    activeColor: accentRed,
+                    inactiveColor: isDark ? Colors.white10 : Colors.black12,
+                    onChanged: (v) => setModalState(() => varietyScore = v),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("Familiar", style: TextStyle(color: Colors.grey, fontSize: 10)),
+                      Text("Surprise Me", style: TextStyle(color: Colors.grey, fontSize: 10)),
+                    ]
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              if (!isGenerating) TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel", style: TextStyle(color: Colors.grey))),
+              if (!isGenerating) TextButton(
+                onPressed: () async {
+                  setModalState(() => isGenerating = true);
+                  
+                  // Run neural network generation
+                  final db = await DatabaseService().database;
+                  final allEx = await db.exercises.where().findAll();
+                  
+                  // Needs to run asynchronously so UI updates
+                  await Future.delayed(const Duration(milliseconds: 100));
+                  
+                  final generated = await RecommendationEngine.generateWorkout(
+                    allExercises: allEx,
+                    currentFatigue: _muscleIntensities,
+                    splitType: selectedSplit,
+                    varietyPreference: varietyScore,
+                  );
+                  
+                  // Create folder
+                  final folderName = "AI: $selectedSplit (${DateTime.now().month}/${DateTime.now().day})";
+                  await db.writeTxn(() async {
+                    final f = WorkoutFolder()..name = folderName;
+                    await db.workoutFolders.put(f);
+                    for (var ex in generated) {
+                      if (!ex.folderNames.contains(folderName)) {
+                        ex.folderNames = List.from(ex.folderNames)..add(folderName);
+                        ex.isFavorite = true;
+                        ex.folderName = folderName;
+                        await db.exercises.put(ex);
+                      }
+                    }
+                  });
+                  
+                  if (mounted) {
+                    Navigator.pop(context);
+                    _refreshData();
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Generated $folderName!')));
+                  }
+                }, 
+                child: Text("Generate", style: TextStyle(color: accentRed, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        }
+      )
     );
   }
 
