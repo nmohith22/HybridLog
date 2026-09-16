@@ -61,11 +61,14 @@ class RunningWidgetProvider : HomeWidgetProvider() {
             // INCREMENT INTENT (Optimistic update via native side first)
             val customIncIntent = Intent(context, RunningWidgetProvider::class.java).apply {
                 action = "INCREMENT_TALLY"
+                data = Uri.parse("hybridlog://native_increment?dayOfWeek=$dayOfWeek&ts=${System.currentTimeMillis()}")
                 putExtra("dayOfWeek", dayOfWeek)
             }
+            // Use a unique request code by casting the current time to Int to ensure uniqueness alongside the URI
+            val uniqueId = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
             val pendingCustomIncIntent = PendingIntent.getBroadcast(
                 context,
-                0,
+                uniqueId,
                 customIncIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )

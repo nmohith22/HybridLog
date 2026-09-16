@@ -37,14 +37,14 @@
     <!-- TITLE AREA (For opening app) -->
     <TextView
         android:id="@+id/day_title"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
         android:text="TODAY"
         android:textColor="#AAAAAA"
         android:textSize="12sp"
         android:textStyle="bold"
         android:letterSpacing="0.2"
-        android:gravity="center_horizontal"
         android:paddingTop="16dp"
         android:paddingBottom="16dp"
         android:clickable="true"
