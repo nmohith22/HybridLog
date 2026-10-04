@@ -8,13 +8,13 @@
     <path d="M656 680H780L773 730H650L656 680Z"/>
     <!-- Three plates on each side, with bar showing past the outer plates. -->
     <g fill="#E5636C">
-      <rect x="270" y="462" width="11" height="118" rx="2"/>
-      <rect x="283" y="462" width="11" height="118" rx="2"/>
-      <rect x="296" y="462" width="11" height="118" rx="2"/>
-      <rect x="570" y="462" width="11" height="118" rx="2"/>
-      <rect x="583" y="462" width="11" height="118" rx="2"/>
-      <rect x="596" y="462" width="11" height="118" rx="2"/>
+      <path d="M278 462H289L273 580H262L278 462Z"/>
+      <path d="M291 462H302L286 580H275L291 462Z"/>
+      <path d="M304 462H315L299 580H288L304 462Z"/>
+      <path d="M578 462H589L573 580H562L578 462Z"/>
+      <path d="M591 462H602L586 580H575L591 462Z"/>
+      <path d="M604 462H615L599 580H588L604 462Z"/>
     </g>
   </g>
-  <rect x="250" y="502" width="380" height="38" rx="19" fill="#F4EDE8"/>
+  <rect x="250" y="507" width="380" height="28" rx="14" fill="#F4EDE8"/>
 </svg>

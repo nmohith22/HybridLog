@@ -35,15 +35,15 @@ void main() {
         ..drawPath(polygon(const [
           Offset(656, 680), Offset(780, 680), Offset(773, 730), Offset(650, 730),
         ]), red)
-        ..drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(270, 462, 11, 118), const Radius.circular(2)), Paint()..color = const Color(0xFFE5636C))
-        ..drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(283, 462, 11, 118), const Radius.circular(2)), Paint()..color = const Color(0xFFE5636C))
-        ..drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(296, 462, 11, 118), const Radius.circular(2)), Paint()..color = const Color(0xFFE5636C))
-        ..drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(570, 462, 11, 118), const Radius.circular(2)), Paint()..color = const Color(0xFFE5636C))
-        ..drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(583, 462, 11, 118), const Radius.circular(2)), Paint()..color = const Color(0xFFE5636C))
-        ..drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(596, 462, 11, 118), const Radius.circular(2)), Paint()..color = const Color(0xFFE5636C))
+        ..drawPath(polygon(const [Offset(278, 462), Offset(289, 462), Offset(273, 580), Offset(262, 580)]), Paint()..color = const Color(0xFFE5636C))
+        ..drawPath(polygon(const [Offset(291, 462), Offset(302, 462), Offset(286, 580), Offset(275, 580)]), Paint()..color = const Color(0xFFE5636C))
+        ..drawPath(polygon(const [Offset(304, 462), Offset(315, 462), Offset(299, 580), Offset(288, 580)]), Paint()..color = const Color(0xFFE5636C))
+        ..drawPath(polygon(const [Offset(578, 462), Offset(589, 462), Offset(573, 580), Offset(562, 580)]), Paint()..color = const Color(0xFFE5636C))
+        ..drawPath(polygon(const [Offset(591, 462), Offset(602, 462), Offset(586, 580), Offset(575, 580)]), Paint()..color = const Color(0xFFE5636C))
+        ..drawPath(polygon(const [Offset(604, 462), Offset(615, 462), Offset(599, 580), Offset(588, 580)]), Paint()..color = const Color(0xFFE5636C))
         ..drawRRect(
           RRect.fromRectAndRadius(
-            const Rect.fromLTWH(250, 502, 380, 38), const Radius.circular(19),
+            const Rect.fromLTWH(250, 507, 380, 28), const Radius.circular(14),
           ),
           Paint()..color = const Color(0xFFF4EDE8),
         );
