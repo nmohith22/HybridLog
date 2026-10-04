@@ -1,89 +1,72 @@
 import 'dart:io';
 import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('Generate Branding Assets', (tester) async {
-    print('--- STARTING ASSET GENERATION ---');
-
-    Future<void> saveIcon(String path, {bool isDark = true, bool isSplash = false}) async {
-      print('Generating: $path...');
+  testWidgets('Generate app icon assets', (tester) async {
+    Future<void> saveIcon(String path, int size) async {
       final recorder = ui.PictureRecorder();
-      final size = isSplash ? 512.0 : 1024.0;
-      final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, size, size));
-      
-      final bgPaint = Paint()..color = isDark ? const Color(0xFF120E15) : const Color(0xFFFAFAFA);
-      if (isSplash) {
-        canvas.drawRect(Rect.fromLTWH(0, 0, size, size), bgPaint);
-      } else {
-        canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, size, size), Radius.circular(size * 0.2)), bgPaint);
-      }
+      final canvas = Canvas(recorder);
+      final scale = size / 1024;
+      canvas.scale(scale);
 
-      final scale = size / 1024.0;
-      final accentColor = const Color(0xFFD93846);
-      
-      // LOGO DESIGN: Modern Angular "HL"
-      // Drawing style: Minimalist slanted vertical bars similar to modern HP logo
-      final logoPaint = Paint()
-        ..color = accentColor
-        ..style = PaintingStyle.fill;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          const Rect.fromLTWH(0, 0, 1024, 1024),
+          const Radius.circular(200),
+        ),
+        Paint()..color = const Color(0xFF120E15),
+      );
 
-      void drawSlantedBar(double x, double y, double width, double height) {
-        final path = Path()
-          ..moveTo(x * scale, y * scale)
-          ..lineTo((x + width) * scale, y * scale)
-          ..lineTo((x + width - 40) * scale, (y + height) * scale)
-          ..lineTo((x - 40) * scale, (y + height) * scale)
-          ..close();
-        canvas.drawPath(path, logoPaint);
-      }
+      final red = Paint()..color = const Color(0xFFD93846);
+      Path polygon(List<Offset> points) => Path()..addPolygon(points, true);
+      canvas
+        ..drawPath(polygon(const [
+          Offset(350, 280), Offset(415, 280), Offset(355, 730), Offset(290, 730),
+        ]), red)
+        ..drawPath(polygon(const [
+          Offset(530, 280), Offset(595, 280), Offset(535, 730), Offset(470, 730),
+        ]), red)
+        ..drawPath(polygon(const [
+          Offset(710, 280), Offset(775, 280), Offset(715, 730), Offset(650, 730),
+        ]), red)
+        ..drawPath(polygon(const [
+          Offset(656, 680), Offset(780, 680), Offset(773, 730), Offset(650, 730),
+        ]), red)
+        ..drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(270, 462, 11, 118), const Radius.circular(2)), Paint()..color = const Color(0xFFE5636C))
+        ..drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(283, 462, 11, 118), const Radius.circular(2)), Paint()..color = const Color(0xFFE5636C))
+        ..drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(296, 462, 11, 118), const Radius.circular(2)), Paint()..color = const Color(0xFFE5636C))
+        ..drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(570, 462, 11, 118), const Radius.circular(2)), Paint()..color = const Color(0xFFE5636C))
+        ..drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(583, 462, 11, 118), const Radius.circular(2)), Paint()..color = const Color(0xFFE5636C))
+        ..drawRRect(RRect.fromRectAndRadius(const Rect.fromLTWH(596, 462, 11, 118), const Radius.circular(2)), Paint()..color = const Color(0xFFE5636C))
+        ..drawRRect(
+          RRect.fromRectAndRadius(
+            const Rect.fromLTWH(250, 502, 380, 38), const Radius.circular(19),
+          ),
+          Paint()..color = const Color(0xFFF4EDE8),
+        );
 
-      // H - Left Bar
-      drawSlantedBar(350, 300, 60, 424);
-      // H - Right Bar
-      drawSlantedBar(480, 300, 60, 424);
-      // H - Crossbar (slightly slanted)
-      final hCrossPath = Path()
-        ..moveTo(395 * scale, 480 * scale)
-        ..lineTo(525 * scale, 480 * scale)
-        ..lineTo(515 * scale, 530 * scale)
-        ..lineTo(385 * scale, 530 * scale)
-        ..close();
-      canvas.drawPath(hCrossPath, logoPaint);
-
-      // L - Vertical Bar
-      drawSlantedBar(610, 300, 60, 424);
-      // L - Horizontal Bar
-      final lBasePath = Path()
-        ..moveTo(570 * scale, 674 * scale)
-        ..lineTo(750 * scale, 674 * scale)
-        ..lineTo(710 * scale, 724 * scale)
-        ..lineTo(530 * scale, 724 * scale)
-        ..close();
-      canvas.drawPath(lBasePath, logoPaint);
-
-      final picture = recorder.endRecording();
-      
-      print('  Step: picture.toImage...');
-      final img = await picture.toImage(size.toInt(), size.toInt());
-      
-      print('  Step: img.toByteData...');
-      final pngBytes = await img.toByteData(format: ui.ImageByteFormat.png);
-      
-      print('  Step: File.write...');
+      final image = await recorder.endRecording().toImage(size, size);
+      final png = await image.toByteData(format: ui.ImageByteFormat.png);
       final file = File(path);
-      if (!file.parent.existsSync()) file.parent.createSync(recursive: true);
-      file.writeAsBytesSync(pngBytes!.buffer.asUint8List());
-      print('Saved: $path (${file.lengthSync()} bytes)');
+      file.parent.createSync(recursive: true);
+      file.writeAsBytesSync(png!.buffer.asUint8List());
     }
 
     await tester.runAsync(() async {
-      await saveIcon('assets/app_icon.png');
-      await saveIcon('assets/splash_icon.png', isDark: false, isSplash: true);
-      await saveIcon('assets/splash_icon_dark.png', isDark: true, isSplash: true);
+      await saveIcon('assets/app_icon.png', 1024);
+      await saveIcon('web/icons/Icon-512.png', 512);
+      await saveIcon('web/icons/Icon-192.png', 192);
+      await saveIcon('web/icons/Icon-maskable-512.png', 512);
+      await saveIcon('web/icons/Icon-maskable-192.png', 192);
+      await saveIcon('web/favicon.png', 32);
+      await saveIcon('android/app/src/main/res/mipmap-mdpi/ic_launcher.png', 48);
+      await saveIcon('android/app/src/main/res/mipmap-hdpi/ic_launcher.png', 72);
+      await saveIcon('android/app/src/main/res/mipmap-xhdpi/ic_launcher.png', 96);
+      await saveIcon('android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png', 144);
+      await saveIcon('android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png', 192);
     });
-
-    print('--- ALL ASSETS GENERATED SUCCESSFULLY ---');
   });
 }
