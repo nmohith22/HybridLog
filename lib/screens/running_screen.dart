@@ -4,8 +4,6 @@ import '../services/database_service.dart';
 import '../models/fitness_schema.dart';
 import '../widgets/yearly_heatmap_calendar.dart';
 import '../widgets/running_block_graph.dart';
-import '../widgets/weather_advice_widget.dart';
-import '../services/weather_service.dart';
 import '../widgets/lego_animations.dart';
 import '../services/data_backup_service.dart';
 import '../services/theme_service.dart';
@@ -25,10 +23,6 @@ class _RunningScreenState extends State<RunningScreen> {
   int _yearlyTotal = 0;
   int _selectedYear = DateTime.now().year;
   bool _isGraphInteracting = false;
-  WeatherData? _weatherData;
-  bool _isWeatherLoading = true;
-  String? _manualCity;
-
 
   final GlobalKey _runningGraphKey = GlobalKey();
   final GlobalKey _runningYearlyHistoryKey = GlobalKey();
@@ -39,7 +33,6 @@ class _RunningScreenState extends State<RunningScreen> {
   void initState() {
     super.initState();
     _calculateYearlyTotal();
-    _loadWeather();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkTutorial();
@@ -167,16 +160,6 @@ class _RunningScreenState extends State<RunningScreen> {
     );
   }
 
-  Future<void> _loadWeather() async {
-    final data = await WeatherService.getLocalWeather(manualCity: _manualCity);
-    if (mounted) {
-      setState(() {
-        _weatherData = data;
-        _isWeatherLoading = false;
-      });
-    }
-  }
-
   Future<void> _calculateYearlyTotal() async {
     final db = await DatabaseService().database;
     final startOfYear = DateTime(_selectedYear, 1, 1);
@@ -191,41 +174,6 @@ class _RunningScreenState extends State<RunningScreen> {
         _yearlyTotal = logs.fold(0, (sum, log) => sum + log.miles);
       });
     }
-  }
-
-  void _showCitySearch() {
-    TextEditingController controller = TextEditingController(text: _manualCity);
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        title: Text("Enter City", style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-          decoration: InputDecoration(
-            hintText: "e.g. New York, London",
-            hintStyle: const TextStyle(color: Colors.grey),
-            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3))),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel", style: TextStyle(color: Colors.grey))),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                _manualCity = controller.text.trim();
-                _isWeatherLoading = true;
-              });
-              _loadWeather();
-              Navigator.pop(context);
-            },
-            child: Text("Search", style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showYearPicker() async {
@@ -356,18 +304,6 @@ class _RunningScreenState extends State<RunningScreen> {
 
                   LegoPop(
                     index: 1,
-                    child: WeatherAdviceWidget(
-                      data: _weatherData,
-                      isLoading: _isWeatherLoading,
-                      onRetry: _loadWeather,
-                      onSearch: _showCitySearch,
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-                  
-                  LegoPop(
-                    index: 2,
                     child: Container(
                       key: _runningYearlyHistoryKey,
                       child: YearlyHeatmapCalendar(

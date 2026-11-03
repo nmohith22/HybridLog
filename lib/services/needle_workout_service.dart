@@ -2,17 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
 import '../models/fitness_schema.dart';
 
 class NeedleWorkoutService {
   static const _channel = MethodChannel('hybridlog/needle');
-  static const _modelUrl =
-      'https://huggingface.co/Cactus-Compute/needle3/resolve/main/needle3.cact?download=true';
   static const _modelName = 'needle3.cact';
-  static const _maxModelBytes = 60 * 1024 * 1024;
   static bool _initialized = false;
 
   static const splitMuscles = <String, List<String>>{
@@ -96,46 +92,21 @@ class NeedleWorkoutService {
 
     final directory = await getApplicationSupportDirectory();
     final model = File('${directory.path}/$_modelName');
-    if (!await model.exists() || await model.length() < 10 * 1024 * 1024) {
-      final temporary = File('${model.path}.download');
-      if (await temporary.exists()) await temporary.delete();
-      final client = http.Client();
-      try {
-        final response =
-            await client.send(http.Request('GET', Uri.parse(_modelUrl)));
-        if (response.statusCode != 200) {
-          throw HttpException(
-              'Needle3 model download failed (HTTP ${response.statusCode}).');
-        }
-        final total = response.contentLength ?? -1;
-        if (total > _maxModelBytes)
-          throw const FormatException('Unexpectedly large Needle3 model.');
-        final sink = temporary.openWrite();
-        var received = 0;
-        try {
-          await for (final chunk in response.stream) {
-            received += chunk.length;
-            if (received > _maxModelBytes)
-              throw const FormatException(
-                  'Needle3 model exceeds the download size limit.');
-            sink.add(chunk);
-            onProgress(received, total);
-          }
-          await sink.flush();
-        } finally {
-          await sink.close();
-        }
-        if (received < 10 * 1024 * 1024)
-          throw const FormatException(
-              'Downloaded Needle3 model is incomplete.');
-        await temporary.rename(model.path);
-      } catch (_) {
-        if (await temporary.exists()) await temporary.delete();
-        rethrow;
-      } finally {
-        client.close();
-      }
+    final bundledModel = await rootBundle.load('assets/needle3.cact');
+    final modelBytes = bundledModel.buffer.asUint8List(
+      bundledModel.offsetInBytes,
+      bundledModel.lengthInBytes,
+    );
+    if (modelBytes.length < 30 * 1024 * 1024) {
+      throw const FormatException('The bundled Needle3 model is incomplete.');
     }
+    if (!await model.exists() || await model.length() != modelBytes.length) {
+      final temporary = File('${model.path}.tmp');
+      await temporary.writeAsBytes(modelBytes, flush: true);
+      if (await model.exists()) await model.delete();
+      await temporary.rename(model.path);
+    }
+    onProgress(modelBytes.length, modelBytes.length);
 
     final result = await _channel
         .invokeMethod<String>('initialize', {'modelPath': model.path});

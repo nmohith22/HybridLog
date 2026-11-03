@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <fstream>
 #include <iterator>
+#include <stdlib.h>
 #include <string>
 #include <vector>
 #include "needle.h"
@@ -23,6 +24,9 @@ jstring toJava(JNIEnv* env, const std::string& value) {
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_example_workout_1app_MainActivity_nativeInitialize(JNIEnv* env, jobject, jstring modelPath) {
     if (ready) return toJava(env, "ok");
+
+    setenv("NEEDLE_TELEMETRY", "0", 1);
+    setenv("DO_NOT_TRACK", "1", 1);
 
     std::ifstream model(fromJava(env, modelPath), std::ios::binary);
     if (!model) return toJava(env, "Unable to open the Needle3 model.");

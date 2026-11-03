@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
 
@@ -41,7 +39,6 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
   List<Exercise> _plan = [];
   bool _includeNew = true;
   bool _working = false;
-  bool _modelReady = false;
   int _received = 0;
   int _total = -1;
   String? _error;
@@ -77,7 +74,6 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
             _total = total;
           });
       });
-      _modelReady = true;
       if (!revise) await NeedleWorkoutService.resetConversation();
       final db = await DatabaseService().database;
       final exercises = await db.exercises.where().findAll();
@@ -99,27 +95,14 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
       if (plan.isEmpty)
         setState(() => _error =
             'No suitable exercises in your library match those choices. Try another split or include new exercises.');
-    } on SocketException catch (_) {
-      if (mounted)
-        setState(() {
-          _working = false;
-          _error = _modelReady
-              ? 'Could not reach Needle3 on this device.'
-              : 'Connect to the internet once to download the on-device model (about 35 MB).';
-        });
     } catch (error) {
       if (mounted)
         setState(() {
           _working = false;
-          final message = error.toString();
-          _error = !_modelReady &&
-                  !message.startsWith('UnsupportedError:') &&
-                  !message.startsWith('FormatException:') &&
-                  !message.contains('HTTP')
-              ? 'Connect to the internet once to download the on-device model (about 35 MB).'
-              : message
-                  .replaceFirst('Bad state: ', '')
-                  .replaceFirst('UnsupportedError: ', '');
+          _error = error
+              .toString()
+              .replaceFirst('Bad state: ', '')
+              .replaceFirst('UnsupportedError: ', '');
         });
     }
   }
@@ -190,7 +173,7 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
                     icon: Icon(Icons.close, color: theme.subText)),
               ]),
               Text(
-                  'Builds a plan from your training history and exercise library. Runs on your device after the first model download.',
+                  'Needle3 is included in the app. Your plan is generated on this device.',
                   style: TextStyle(color: theme.subText, fontSize: 12)),
               const SizedBox(height: 16),
               if (_working)
@@ -205,8 +188,8 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
                         backgroundColor: theme.background),
                     const SizedBox(height: 9),
                     Text(
-                        _total > 0 && _received < _total
-                            ? 'Downloading Needle3 · ${(_received / 1048576).toStringAsFixed(1)} / ${(_total / 1048576).toStringAsFixed(1)} MB'
+                        _received == 0
+                            ? 'Loading the included Needle3 model…'
                             : 'Planning your workout…',
                         style: TextStyle(color: theme.subText, fontSize: 12)),
                   ]),
