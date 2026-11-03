@@ -5,11 +5,17 @@ import '../models/fitness_schema.dart';
 import '../services/database_service.dart';
 import '../services/needle_workout_service.dart';
 import '../services/theme_service.dart';
+import 'needle_data_dialog.dart';
 
 class NeedleWorkoutDialog extends StatefulWidget {
   final Map<String, double> fatigue;
+  final VoidCallback? onDataChanged;
 
-  const NeedleWorkoutDialog({super.key, required this.fatigue});
+  const NeedleWorkoutDialog({
+    super.key,
+    required this.fatigue,
+    this.onDataChanged,
+  });
 
   @override
   State<NeedleWorkoutDialog> createState() => _NeedleWorkoutDialogState();
@@ -175,6 +181,27 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
               Text(
                   'Needle3 is included in the app. Your plan is generated on this device.',
                   style: TextStyle(color: theme.subText, fontSize: 12)),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: _working
+                      ? null
+                      : () => showDialog<void>(
+                            context: context,
+                            builder: (_) => NeedleDataDialog(
+                              onChanged: widget.onDataChanged,
+                            ),
+                          ),
+                  icon: const Icon(Icons.storage_outlined, size: 16),
+                  label: const Text('Manage app data with Needle'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: theme.accent,
+                    side: BorderSide(color: theme.accent.withValues(alpha: .6)),
+                    textStyle: const TextStyle(fontSize: 12),
+                  ),
+                ),
+              ),
               const SizedBox(height: 16),
               if (_working)
                 Padding(

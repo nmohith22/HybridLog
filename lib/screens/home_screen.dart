@@ -1727,7 +1727,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   void _showAIGeneratorDialog() {
     showDialog<String>(
       context: context,
-      builder: (_) => NeedleWorkoutDialog(fatigue: _muscleIntensities),
+      builder: (_) => NeedleWorkoutDialog(
+        fatigue: _muscleIntensities,
+        onDataChanged: () {
+          _refreshData();
+          _loadRecentMuscles();
+        },
+      ),
     ).then((folderName) {
       if (folderName == null || !mounted) return;
       _refreshData();
