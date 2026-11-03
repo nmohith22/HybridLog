@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/fitness_schema.dart';
 import '../services/database_service.dart';
 import '../services/theme_service.dart';
+import '../utils/weight_reps_format.dart';
 
 class ExerciseHistoryScreen extends StatefulWidget {
   final Exercise exercise;
@@ -99,7 +100,7 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
                                         Row(
                                           children: [
                                             Text('Set ${setIdx + 1}: ', style: TextStyle(color: theme.subText, fontWeight: FontWeight.bold)),
-                                            Text('${s.weight} lbs x ${s.reps} reps', style: TextStyle(color: textColor)),
+                                            Text(formatWeightReps(s.weight, s.reps), style: TextStyle(color: textColor)),
                                           ],
                                         ),
                                         if (s.subSets.isNotEmpty)
@@ -107,7 +108,7 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
                                             padding: const EdgeInsets.only(left: 16.0, top: 4.0),
                                             child: Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: s.subSets.map((sub) => Text('Drop: ${sub.weight} lbs x ${sub.reps} reps', style: TextStyle(color: theme.accent, fontSize: 12))).toList(),
+                                              children: s.subSets.map((sub) => Text('Drop: ${formatWeightReps(sub.weight, sub.reps)}', style: TextStyle(color: theme.accent, fontSize: 12))).toList(),
                                             ),
                                           ),
                                         if (s.restPauseSeconds != null)

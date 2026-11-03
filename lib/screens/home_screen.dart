@@ -15,6 +15,7 @@ import 'exercise_history_screen.dart';
 import '../ml/recommendation_engine.dart';
 import '../services/recovery_predictor.dart';
 import '../services/tutorial_service.dart';
+import '../utils/weight_reps_format.dart';
 
 // --- HELPER: MARQUEE TEXT ---
 class MarqueeText extends StatefulWidget {
@@ -674,7 +675,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     const SizedBox(height: 4),
                     if (sets != null && sets.isNotEmpty)
                       Text(
-                        sets.map((s) => '${s.reps}x${s.weight.toInt()}').join(', '),
+                        sets.map((s) => formatWeightReps(s.weight, s.reps)).join(', '),
                         style: TextStyle(color: secondaryTextColor, fontSize: 13, fontWeight: FontWeight.w500),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
