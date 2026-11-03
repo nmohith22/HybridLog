@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -20,18 +21,34 @@ class _NeedleDataDialogState extends State<NeedleDataDialog> {
   bool _working = false;
   String? _message;
   bool _error = false;
+  final _sessionHistory = <Map<String, String>>[];
 
   AppTheme get _theme => ThemeService().getResolvedTheme(context);
 
   @override
   void dispose() {
     _requestController.dispose();
+    unawaited(NeedleWorkoutService.resetConversation().catchError((_) {}));
     super.dispose();
   }
 
   Future<void> _askNeedle() async {
     final request = _requestController.text.trim();
     if (request.isEmpty || _working) return;
+    if (request.length > 1200) {
+      setState(() {
+        _error = true;
+        _message =
+            'That’s a lot to sort through. Try one request in 1,200 characters or less.';
+      });
+      return;
+    }
+    FocusManager.instance.primaryFocus?.unfocus();
+    final previousAction = _action;
+    if (previousAction != null && previousAction.operation != 'read') {
+      _replaceLastAssistantMessage(
+          'That proposal was not approved, so Steel did not apply it.');
+    }
     setState(() {
       _working = true;
       _action = null;
@@ -41,24 +58,41 @@ class _NeedleDataDialogState extends State<NeedleDataDialog> {
     try {
       await NeedleWorkoutService.ensureReady(onProgress: (_, __) {});
       await NeedleWorkoutService.resetConversation();
-      final action = await NeedleWorkoutService.proposeDataAction(request);
+      final action = await NeedleWorkoutService.proposeDataAction(
+        request,
+        sessionHistory: List<Map<String, String>>.unmodifiable(_sessionHistory),
+      );
+      if (action.operation == 'delete' &&
+          RegExp(r'\b(all|every|each|bulk|everything)\b')
+              .hasMatch(request.toLowerCase())) {
+        throw const FormatException(
+          'Steel can delete one item at a time. Please name one record.',
+        );
+      }
       if (!_requestExplicitlyAllows(request, action.operation)) {
         throw const FormatException(
           'Needle proposed an operation that was not explicit in your request. Please rephrase it.',
         );
       }
       if (!mounted) return;
+      _rememberExchange(
+        request,
+        action.operation == 'read'
+            ? action.summary
+            : 'Steel proposed: ${action.summary} This has not been applied.',
+      );
       setState(() {
         _action = action;
         _message = action.operation == 'read'
             ? action.summary
-            : 'Review Needle’s proposal below. Nothing is saved until you approve it.';
+            : 'Here’s Steel’s proposal. Nothing changes until you approve it.';
       });
     } catch (error) {
       if (mounted) {
+        _rememberExchange(request, _friendlyError(error));
         setState(() {
           _error = true;
-          _message = error.toString().replaceFirst('FormatException: ', '');
+          _message = _friendlyError(error);
         });
       }
     } finally {
@@ -66,9 +100,57 @@ class _NeedleDataDialogState extends State<NeedleDataDialog> {
     }
   }
 
+  String _friendlyError(Object error, {bool applying = false}) {
+    final detail = error.toString().toLowerCase();
+    if (detail.contains('already exists')) {
+      return 'There’s already an item with that name. Try a different name.';
+    }
+    if (detail.contains('no longer exists')) {
+      return 'That item may have changed. Please refresh, then ask Steel again.';
+    }
+    if (detail.contains('one item at a time')) {
+      return 'I can delete one item at a time. Please name one record.';
+    }
+    if (detail.contains('unsupportederror')) {
+      return 'Steel needs a supported ARM Android device. You can still manage your records in HybridLog.';
+    }
+    if (applying) {
+      return 'I couldn’t confirm that change finished. Check the record before trying again.';
+    }
+    return 'I couldn’t prepare that safely. Try naming the item and asking for one action at a time.';
+  }
+
+  void _rememberExchange(String request, String response) {
+    _sessionHistory
+      ..add({'role': 'user', 'content': _limitContext(request)})
+      ..add({'role': 'assistant', 'content': _limitContext(response)});
+    while (_sessionHistory.length > 8) {
+      _sessionHistory.removeAt(0);
+    }
+  }
+
+  String _limitContext(String value) =>
+      value.length <= 300 ? value : '${value.substring(0, 297)}...';
+
+  void _replaceLastAssistantMessage(String message) {
+    for (var i = _sessionHistory.length - 1; i >= 0; i--) {
+      if (_sessionHistory[i]['role'] == 'assistant') {
+        _sessionHistory[i] = {
+          'role': 'assistant',
+          'content': _limitContext(message),
+        };
+        return;
+      }
+    }
+  }
+
   bool _requestExplicitlyAllows(String request, String operation) {
     final text = request.toLowerCase();
     if (operation == 'read') return true;
+    if (operation == 'delete' &&
+        RegExp(r'\b(all|every|each|bulk|everything)\b').hasMatch(text)) {
+      return false;
+    }
     if (RegExp(
       r"\b(don't|do not|never|without)\s+(delete|remove|erase|create|add|make|log|record|update|edit|change|rename|modify)\b",
     ).hasMatch(text)) {
@@ -98,16 +180,23 @@ class _NeedleDataDialogState extends State<NeedleDataDialog> {
       await NeedleWorkoutService.applyApprovedDataAction(action);
       widget.onChanged?.call();
       if (!mounted) return;
+      final completed = switch (action.operation) {
+        'create' => 'Done. I added it to your local app data.',
+        'update' => 'Done. I saved that change on this device.',
+        'delete' => 'Done. I deleted the selected item.',
+        _ => 'Done.',
+      };
+      _replaceLastAssistantMessage(completed);
       setState(() {
         _action = null;
         _error = false;
-        _message = 'Approved ${action.operation} completed.';
+        _message = completed;
       });
     } catch (error) {
       if (mounted) {
         setState(() {
           _error = true;
-          _message = error.toString().replaceFirst('Bad state: ', '');
+          _message = _friendlyError(error, applying: true);
         });
       }
     } finally {
@@ -193,7 +282,7 @@ class _NeedleDataDialogState extends State<NeedleDataDialog> {
                 Icon(Icons.storage_outlined, color: theme.accent),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text('Manage app data',
+                  child: Text('Steel · app data',
                       style: TextStyle(
                           color: theme.text,
                           fontSize: 19,
@@ -205,7 +294,7 @@ class _NeedleDataDialogState extends State<NeedleDataDialog> {
                 ),
               ]),
               Text(
-                'Ask Needle to read or change your exercises, folders, workouts, or runs. It only proposes one action at a time; you approve every change.',
+                'Ask Steel to read or change your exercises, folders, workouts, or runs. It proposes one action at a time, and you approve every change.',
                 style: TextStyle(color: theme.subText, fontSize: 12),
               ),
               const SizedBox(height: 14),
@@ -216,7 +305,7 @@ class _NeedleDataDialogState extends State<NeedleDataDialog> {
                 enabled: !_working,
                 style: TextStyle(color: theme.text),
                 decoration: InputDecoration(
-                  hintText: 'Example: add an exercise named Incline Press',
+                  hintText: 'For example: add an exercise called Incline Press',
                   hintStyle: TextStyle(color: theme.subText),
                   filled: true,
                   fillColor: theme.background,
@@ -236,7 +325,7 @@ class _NeedleDataDialogState extends State<NeedleDataDialog> {
                           dimension: 16,
                           child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.auto_awesome, size: 17),
-                  label: Text(_working ? 'Working…' : 'Ask Needle'),
+                  label: Text(_working ? 'Working…' : 'Ask Steel'),
                 ),
               ),
               if (_message != null)

@@ -137,7 +137,10 @@ class NeedleWorkoutService {
   static Future<void> resetConversation() =>
       _channel.invokeMethod<void>('reset');
 
-  static Future<NeedleDataAction> proposeDataAction(String userRequest) async {
+  static Future<NeedleDataAction> proposeDataAction(
+    String userRequest, {
+    List<Map<String, String>> sessionHistory = const [],
+  }) async {
     final db = await DatabaseService().database;
     final exercises = await db.exercises.where().sortByName().findAll();
     final folders = await db.workoutFolders.where().sortByName().findAll();
@@ -145,6 +148,7 @@ class NeedleWorkoutService {
     final runs = await db.runningLogs.where().sortByDateDesc().findAll();
     final request = jsonEncode({
       'user_request': userRequest,
+      'session_history': sessionHistory,
       'record_shapes': {
         'exercise': {
           'name': 'text',
@@ -453,7 +457,8 @@ class NeedleWorkoutService {
               .contains(recordType) ||
           summary is! String ||
           summary.trim().isEmpty ||
-          summary.length > 500) {
+          summary.length > 360 ||
+          summary.trim().split(RegExp(r'(?<=[.!?])\s+')).length > 3) {
         break;
       }
       final idValue = parsed['record_id'];
@@ -618,6 +623,7 @@ class NeedleWorkoutService {
     required bool includeNewExercises,
     required Map<String, double> fatigue,
     required Set<String> unavailable,
+    List<Exercise> currentPlan = const [],
   }) async {
     final used = <String, int>{};
     final recent = history.toList()..sort((a, b) => b.date.compareTo(a.date));
@@ -664,6 +670,7 @@ class NeedleWorkoutService {
             })
         .toList();
     final request = jsonEncode({
+      'previous_plan': currentPlan.map((exercise) => exercise.name).toList(),
       'request':
           'Plan a ${splits.join(' and ')} workout with 4 to 8 distinct exercises. Use recent history to avoid repeating too much and avoid heavily fatigued muscles when practical. ${includeNewExercises ? 'Include up to two suitable exercises marked used_before=false.' : 'Use only exercises marked used_before=true.'} ${unavailable.isEmpty ? '' : 'The user says they cannot use this equipment/exercise: ${unavailable.join(', ')}. Replace those with suitable alternatives.'} Return 6 exercises when possible.',
       'recent_workouts': historySummary,

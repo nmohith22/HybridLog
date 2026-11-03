@@ -55,7 +55,7 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
   void initState() {
     super.initState();
     final now = DateTime.now();
-    _folderController.text = 'Needle Workout ${now.month}/${now.day}';
+    _folderController.text = 'Steel Workout ${now.month}/${now.day}';
   }
 
   @override
@@ -91,6 +91,7 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
         includeNewExercises: _includeNew,
         fatigue: widget.fatigue,
         unavailable: _unavailable,
+        currentPlan: revise ? _plan : const [],
       );
       if (!mounted) return;
       setState(() {
@@ -100,15 +101,14 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
       });
       if (plan.isEmpty)
         setState(() => _error =
-            'No suitable exercises in your library match those choices. Try another split or include new exercises.');
+            'Steel couldn’t find enough matching exercises. Try another workout focus or include new exercises.');
     } catch (error) {
       if (mounted)
         setState(() {
           _working = false;
-          _error = error
-              .toString()
-              .replaceFirst('Bad state: ', '')
-              .replaceFirst('UnsupportedError: ', '');
+          _error = error.toString().contains('UnsupportedError')
+              ? 'Steel needs a supported ARM Android device. Your workout data is still available in HybridLog.'
+              : 'I couldn’t put together that plan. Try another workout focus or check your exercise library.';
         });
     }
   }
@@ -169,7 +169,7 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
                 Icon(Icons.auto_awesome, color: theme.accent),
                 const SizedBox(width: 10),
                 Expanded(
-                    child: Text('Needle Workout Planner',
+                    child: Text('Steel Workout Planner',
                         style: TextStyle(
                             color: theme.text,
                             fontSize: 19,
@@ -179,7 +179,7 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
                     icon: Icon(Icons.close, color: theme.subText)),
               ]),
               Text(
-                  'Needle3 is included in the app. Your plan is generated on this device.',
+                  'Steel uses the included Needle3 model to plan workouts on this device.',
                   style: TextStyle(color: theme.subText, fontSize: 12)),
               const SizedBox(height: 8),
               Align(
@@ -194,7 +194,7 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
                             ),
                           ),
                   icon: const Icon(Icons.storage_outlined, size: 16),
-                  label: const Text('Manage app data with Needle'),
+                  label: const Text('Manage app data with Steel'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: theme.accent,
                     side: BorderSide(color: theme.accent.withValues(alpha: .6)),
@@ -216,8 +216,8 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
                     const SizedBox(height: 9),
                     Text(
                         _received == 0
-                            ? 'Loading the included Needle3 model…'
-                            : 'Planning your workout…',
+                            ? 'Getting Steel ready…'
+                            : 'Steel is putting together your workout…',
                         style: TextStyle(color: theme.subText, fontSize: 12)),
                   ]),
                 )
