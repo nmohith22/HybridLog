@@ -1,0 +1,50 @@
+[
+  {
+    "name": "explicit create",
+    "request": "Add an exercise named Incline Press.",
+    "operation": "create",
+    "expected": "allow"
+  },
+  {
+    "name": "advice is not a create request",
+    "request": "What exercise should I add to my workout?",
+    "operation": "create",
+    "expected": "deny"
+  },
+  {
+    "name": "explicit update",
+    "request": "Change my 3-mile run to 4 miles.",
+    "operation": "update",
+    "expected": "allow"
+  },
+  {
+    "name": "negated update",
+    "request": "Do not update my run.",
+    "operation": "update",
+    "expected": "deny"
+  },
+  {
+    "name": "single delete",
+    "request": "Delete the run from Tuesday.",
+    "operation": "delete",
+    "expected": "allow"
+  },
+  {
+    "name": "bulk delete",
+    "request": "Delete all of my runs.",
+    "operation": "delete",
+    "expected": "deny"
+  },
+  {
+    "name": "multiple delete",
+    "request": "Remove both workouts from today.",
+    "operation": "delete",
+    "expected": "deny"
+  },
+  {
+    "name": "read request cannot authorize a delete",
+    "request": "Show my recent runs.",
+    "operation": "delete",
+    "expected": "deny"
+  }
+]

@@ -5,17 +5,58 @@ on:
     branches: [main]
     paths:
       - "release/HybridLog-*.apk"
+  pull_request:
+    branches: [main]
+    paths:
+      - "lib/**"
+      - "test/**"
+      - "evals/**"
+      - "tool/**"
+      - "android/app/src/main/cpp/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - ".github/workflows/release-apk.yml"
 
-permissions:
-  contents: write
+permissions: {}
 
 concurrency:
   group: hybridlog-apk-release
   cancel-in-progress: false
 
 jobs:
-  publish:
+  test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.44.1"
+          cache: true
+      - name: Resolve Flutter packages
+        run: flutter pub get
+      - name: Run Flutter unit and widget tests
+        run: flutter test --reporter expanded
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: evals/requirements.txt
+      - name: Install offline evaluation tools
+        run: python -m pip install -r evals/requirements.txt
+      - name: Run Steel policy evaluation with pytest and Ragas
+        env:
+          RAGAS_DO_NOT_TRACK: "true"
+        run: pytest -q evals
+
+  publish:
+    if: github.event_name == 'push'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:

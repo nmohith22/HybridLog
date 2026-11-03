@@ -4,7 +4,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../services/needle_workout_service.dart';
+import '../services/steel_guardrails.dart';
 import '../services/theme_service.dart';
+import 'steel_delete_confirmation_dialog.dart';
 
 class NeedleDataDialog extends StatefulWidget {
   final VoidCallback? onChanged;
@@ -63,13 +65,12 @@ class _NeedleDataDialogState extends State<NeedleDataDialog> {
         sessionHistory: List<Map<String, String>>.unmodifiable(_sessionHistory),
       );
       if (action.operation == 'delete' &&
-          RegExp(r'\b(all|every|each|bulk|everything)\b')
-              .hasMatch(request.toLowerCase())) {
+          SteelGuardrails.isBulkDeleteRequest(request)) {
         throw const FormatException(
           'Steel can delete one item at a time. Please name one record.',
         );
       }
-      if (!_requestExplicitlyAllows(request, action.operation)) {
+      if (!SteelGuardrails.allowsOperation(request, action.operation)) {
         throw const FormatException(
           'Needle proposed an operation that was not explicit in your request. Please rephrase it.',
         );
@@ -144,33 +145,12 @@ class _NeedleDataDialogState extends State<NeedleDataDialog> {
     }
   }
 
-  bool _requestExplicitlyAllows(String request, String operation) {
-    final text = request.toLowerCase();
-    if (operation == 'read') return true;
-    if (operation == 'delete' &&
-        RegExp(r'\b(all|every|each|bulk|everything)\b').hasMatch(text)) {
-      return false;
-    }
-    if (RegExp(
-      r"\b(don't|do not|never|without)\s+(delete|remove|erase|create|add|make|log|record|update|edit|change|rename|modify)\b",
-    ).hasMatch(text)) {
-      return false;
-    }
-    final pattern = switch (operation) {
-      'create' => r'\b(create|add|make|log|record|save)\b',
-      'update' => r'\b(update|edit|change|rename|modify)\b',
-      'delete' => r'\b(delete|remove|erase)\b',
-      'read' =>
-        r'\b(show|list|find|read|tell|what|which|when|how many|how much)\b',
-      _ => r'(?!)',
-    };
-    return RegExp(pattern).hasMatch(text);
-  }
-
   Future<void> _approve() async {
     final action = _action;
     if (action == null || action.operation == 'read' || _working) return;
-    if (action.operation == 'delete' && !await _confirmDelete(action)) return;
+    if (action.operation == 'delete' && !await _confirmDelete(action.summary)) {
+      return;
+    }
 
     setState(() {
       _working = true;
@@ -204,61 +184,14 @@ class _NeedleDataDialogState extends State<NeedleDataDialog> {
     }
   }
 
-  Future<bool> _confirmDelete(NeedleDataAction action) async {
+  Future<bool> _confirmDelete(String summary) async {
     final theme = _theme;
-    var checked = false;
-    return await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => StatefulBuilder(
-            builder: (context, setModalState) => AlertDialog(
-              backgroundColor: theme.card,
-              titlePadding: const EdgeInsets.fromLTRB(20, 12, 8, 0),
-              title: Row(children: [
-                Expanded(
-                  child: Text('Confirm deletion',
-                      style: TextStyle(
-                          color: theme.text, fontWeight: FontWeight.bold)),
-                ),
-                IconButton(
-                  tooltip: 'Cancel deletion',
-                  onPressed: () => Navigator.pop(dialogContext, false),
-                  icon: const Icon(Icons.close, color: Colors.red),
-                ),
-              ]),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(action.summary, style: TextStyle(color: theme.text)),
-                  const SizedBox(height: 12),
-                  Text('This deletion cannot be undone.',
-                      style: TextStyle(color: theme.subText)),
-                  const SizedBox(height: 8),
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: checked,
-                    activeColor: Colors.red,
-                    title: Text('I want to delete this item',
-                        style: TextStyle(color: theme.text, fontSize: 13)),
-                    controlAffinity: ListTileControlAffinity.leading,
-                    onChanged: (value) =>
-                        setModalState(() => checked = value ?? false),
-                  ),
-                ],
-              ),
-              actions: [
-                FilledButton(
-                  onPressed:
-                      checked ? () => Navigator.pop(dialogContext, true) : null,
-                  style: FilledButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      disabledBackgroundColor:
-                          Colors.red.withValues(alpha: .3)),
-                  child: const Text('Delete'),
-                ),
-              ],
-            ),
-          ),
+    return await SteelDeleteConfirmationDialog.show(
+          context,
+          summary: summary,
+          cardColor: theme.card,
+          textColor: theme.text,
+          secondaryTextColor: theme.subText,
         ) ??
         false;
   }
