@@ -1,58 +1,27 @@
-# 🧊 HybridLog
-HybridLog is a high-performance, minimalist fitness tracker designed for the sophisticated athlete. It combines high-density information architecture with a tactile aesthetic to turn every workout into a building block for your future self.
+# HybridLog
 
----
+HybridLog is an Android app for tracking strength workouts and running.
 
-## Aesthetic & Philosophy
+## Features
 
-*   **Quiet Luxury:** A muted, non-intrusive color palette.
-*   **Tactile Feedback:** Every interaction uses animation suite—staggered pops, springy buttons, and satisfying snapping transitions.
-*   **Gesture-Driven:** No cluttered navigation bars. Navigate through your training history and planning with smooth, horizontal swipes.
+- **Strength workouts:** Log exercises, sets, weight, and reps. Search and filter the exercise library, add custom exercises, and organize favorites into folders.
+- **All Workouts:** Browse sessions by year, view workout details, and see a front or back muscle heatmap on each session card.
+- **Needle3 workout planner:** Generate a plan from recent workouts, training focus, exercise familiarity, and recovery state. Mark unavailable equipment to request substitutions, then save the plan to a Favorites folder. The Apache-2.0 Needle3 model downloads on first use (about 35 MB); inference runs on-device on ARM Android devices. [Needle3 source](https://github.com/cactus-compute/needle).
+- **Recovery:** Review a weekly muscle fatigue heatmap and estimated recovery times.
+- **Running:** Track mileage, view weather advice, and update the Android home-screen widget.
+- **Themes and data:** Choose a color theme and import or export workout data from Settings.
 
----
+Workout and running logs are stored locally. Workout planning runs locally after the Needle3 model download. Weather advice uses online weather and location services.
 
-## 🚀 Key Features
+## Install
 
-*   **🏗️ Building Block Graph:** A vertical-drag running mileage tracker. Add miles like blocks and watch your week build up.
-*   **⚖️ Resistance Training Tracking:** Log exercises, sets, and reps with a UI optimized for speed and stability. Organizes exercises across folders, featuring advanced filtering (by muscle & manufacturer), clean hierarchical naming for long exercises, and custom sorting (A-Z, Z-A, and Most Recent).
-*   **🌙 Environment-Aware Weather Intelligence:** Real-time outdoor workout advice that adjusts for temperature, wind, and sunset. Features a night-mode moon icon and safety tips after dark.
-*   **📦 Muscle-Group Visualization:** Standardized anatomical tracking (e.g., "Front Deltoids") featuring multiple main/secondary muscle selections and interactive front/back body SVG previews.
-*   **🔥 Volume-Load Fatigue Heatmap:** Real-time muscle recovery visualization using a calibrated `weight × reps` volume-load model with time-decay, high-rep bonuses, and per-muscle thresholds.
-*   **🧠 Needle3 Workout Planner:** Builds workout drafts on-device from recent workout history, selected training splits, familiar and new exercises, and recovery state. Users can flag unavailable equipment and ask for substitutions, then save the plan as a Favorites folder. Needle3's Apache-2.0 Android engine is included; its approximately 35 MB model downloads on the first planning session and stays on-device.
-*   **🔋 Mathematical Recovery Predictor:** A deterministic half-life calculation engine that projects the exact hours and days until heavily taxed muscle groups are fully recovered, deeply integrated directly into the SVG Heatmap UI.
-*   **📅 High-Density Workout History:** Dynamic chronological log organized by year-based selectors with collapsible weekday date cards, per-session muscle heatmaps, and dedicated details popups.
-*   **🏠 Live Home-Screen Widget:** Keep your daily progress at a glance with a real-time, interactive Android tally counter widget. Features optimistic UI updates for instant tap responsiveness, manual refresh, and automatic inheritance of the app's custom active theme.
-*   **🎨 Custom Theming & Monkeytype-like Palettes:** Choose from 11 custom themes (Carbon, Serika Dark, Nord, Cyberpunk, Laser, Sakura, Botanical, Modern Ink, Terra, Matrix, Red Dragon) via a horizontal visual preview selector showcasing actual color combinations.
+Download the latest Android APK: **[Download HybridLog 1.0.5 for Android](https://github.com/nmohith22/HybridLog/releases/download/v1.0.5/HybridLog-1.0.5.apk)** | [All releases](https://github.com/nmohith22/HybridLog/releases).
 
----
+## Build
 
-## 🛠️ Technology Stack
+Requires Flutter, the Android SDK and NDK, and CMake.
 
-*   **Framework:** [Flutter](https://flutter.dev/) (3.x)
-*   **Database:** [Isar](https://isar.dev/) - An ultra-fast, cross-platform NoSQL database.
-*   **State Management:** Service-based architecture with Stream-based real-time UI updates.
-*   **Native Integration:** Kotlin-based Android AppWidgets and the Apache-2.0 [Needle3](https://github.com/cactus-compute/needle) inference engine.
-
----
-
-## 🛡️ Privacy & Data Integrity
-
-**Your data belongs to you.**
-*   **Local Only:** HybridLog does not use any cloud backends. All workout history, mileage, and personal metrics are stored strictly on your device using the encrypted Isar database.
-*   **Zero Remote Access:** No user data is ever uploaded, shared, or accessible from GitHub or any remote server.
-*   **Offline First:** Workout logging and planning run locally. The Needle3 model needs an internet connection for its one-time download.
-
----
-
-## 📥 Getting Started
-
-### Installation
-Download the latest Android build from GitHub: **[Download HybridLog 1.0.5 for Android](https://github.com/nmohith22/HybridLog/releases/download/v1.0.5/HybridLog-1.0.5.apk)** | [View all releases](https://github.com/nmohith22/HybridLog/releases).
-
-1.  Download the APK from the link above to your Android device.
-2.  Enable "Install from Unknown Sources" in your device settings.
-3.  Open the APK to install and start tracking.
-
----
-
-Have fun!
+```sh
+flutter pub get
+flutter build apk --release
+```
