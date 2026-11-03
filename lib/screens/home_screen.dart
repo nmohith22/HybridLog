@@ -12,8 +12,8 @@ import '../widgets/theme_picker_widget.dart';
 import '../main.dart';
 import '../widgets/lego_animations.dart';
 import 'exercise_history_screen.dart';
-import '../ml/recommendation_engine.dart';
 import '../services/recovery_predictor.dart';
+import '../widgets/needle_workout_dialog.dart';
 import '../services/tutorial_service.dart';
 import '../utils/weight_reps_format.dart';
 
@@ -1706,154 +1706,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   void _showAIGeneratorDialog() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    List<String> selectedSplits = ['Fullbody'];
-    bool onlyFamiliar = true;
-    bool isGenerating = false;
-    
-    final splitOptions = [
-      'Push', 'Pull', 'Legs', 'Upper', 'Lower', 'Fullbody',
-      'Shoulders', 'Arms', 'Shoulders and Arms', 'Back', 'Chest',
-      'Chest and Back', 'Posterior', 'Anterior'
-    ];
-    
-    showDialog(
+    showDialog<String>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) {
-          return AlertDialog(
-            backgroundColor: isDark ? cardPurple : Colors.white,
-            title: Row(
-              children: [
-                Icon(Icons.auto_awesome, color: accentRed),
-                const SizedBox(width: 8),
-                Text('AI Workout Generator', style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 18, fontWeight: FontWeight.bold)),
-              ],
-            ),
-            content: isGenerating 
-              ? SizedBox(height: 150, child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 16),
-                  Text("Training Native Neural Network...", style: TextStyle(color: isDark ? Colors.grey : Colors.grey[700], fontSize: 12))
-                ])))
-              : SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("Split Preference (Multi-Select)", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 12, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8.0,
-                    runSpacing: 4.0,
-                    children: splitOptions.map((s) {
-                      final isSelected = selectedSplits.contains(s);
-                      return FilterChip(
-                        label: Text(
-                          s,
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : (isDark ? Colors.grey[300] : Colors.black87),
-                            fontSize: 12,
-                          ),
-                        ),
-                        selected: isSelected,
-                        onSelected: (selected) {
-                          setModalState(() {
-                            if (s == 'Fullbody') {
-                              if (selected) {
-                                selectedSplits = ['Fullbody'];
-                              } else {
-                                selectedSplits.remove('Fullbody');
-                              }
-                            } else {
-                              if (selected) {
-                                selectedSplits.remove('Fullbody');
-                                selectedSplits.add(s);
-                              } else {
-                                selectedSplits.remove(s);
-                              }
-                            }
-                          });
-                        },
-                        selectedColor: accentRed,
-                        backgroundColor: isDark ? bgDarkPurple : Colors.grey[100],
-                        checkmarkColor: Colors.white,
-                        showCheckmark: false,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 24),
-                  Text("Exercise Selection", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 12, fontWeight: FontWeight.bold)),
-                  SwitchListTile(
-                    title: Text(onlyFamiliar ? "Only Familiar Exercises" : "Include New Exercises", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14)),
-                    subtitle: Text(onlyFamiliar ? "Limits to exercises you've done before." : "Explores unfamiliar exercises.", style: TextStyle(color: Colors.grey, fontSize: 11)),
-                    value: !onlyFamiliar,
-                    activeColor: accentRed,
-                    contentPadding: EdgeInsets.zero,
-                    onChanged: (val) {
-                      setModalState(() => onlyFamiliar = !val);
-                    },
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              if (!isGenerating) TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel", style: TextStyle(color: Colors.grey))),
-              if (!isGenerating) TextButton(
-                onPressed: () async {
-                  if (selectedSplits.isEmpty) return;
-                  setModalState(() => isGenerating = true);
-                  
-                  // Run neural network generation
-                  final db = await DatabaseService().database;
-                  final allEx = await db.exercises.where().findAll();
-                  
-                  // Needs to run asynchronously so UI updates
-                  await Future.delayed(const Duration(milliseconds: 100));
-                  
-                  final generated = await RecommendationEngine.generateWorkout(
-                    allExercises: allEx,
-                    currentFatigue: _muscleIntensities,
-                    splitTypes: selectedSplits,
-                    onlyFamiliar: onlyFamiliar,
-                  );
-                  
-                  // Create folder
-                  String splitLabel = selectedSplits.length > 2 
-                      ? "Custom" 
-                      : selectedSplits.take(2).join(', ');
-                  final folderName = "AI: $splitLabel (${DateTime.now().month}/${DateTime.now().day})";
-                  
-                  await db.writeTxn(() async {
-                    final existingFolder = await db.workoutFolders.filter().nameEqualTo(folderName).findFirst();
-                    if (existingFolder == null) {
-                      final f = WorkoutFolder()..name = folderName;
-                      await db.workoutFolders.put(f);
-                    }
-                    for (var ex in generated) {
-                      if (!ex.folderNames.contains(folderName)) {
-                        ex.folderNames = List.from(ex.folderNames)..add(folderName);
-                        ex.isFavorite = true;
-                        ex.folderName = folderName;
-                        await db.exercises.put(ex);
-                      }
-                    }
-                  });
-                  
-                  if (mounted) {
-                    Navigator.pop(context);
-                    _refreshData();
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Generated $folderName!')));
-                  }
-                }, 
-                child: Text("Generate", style: TextStyle(color: selectedSplits.isEmpty ? Colors.grey : accentRed, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          );
-        }
-      )
-    );
+      builder: (_) => NeedleWorkoutDialog(fatigue: _muscleIntensities),
+    ).then((folderName) {
+      if (folderName == null || !mounted) return;
+      _refreshData();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Saved $folderName to favorites.')),
+      );
+    });
   }
 
   Widget _buildMainScreenFavorites(double scrollOffset, double viewportHeight) {

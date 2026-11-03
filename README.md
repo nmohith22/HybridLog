@@ -18,7 +18,7 @@ HybridLog is a high-performance, minimalist fitness tracker designed for the sop
 *   **🌙 Environment-Aware Weather Intelligence:** Real-time outdoor workout advice that adjusts for temperature, wind, and sunset. Features a night-mode moon icon and safety tips after dark.
 *   **📦 Muscle-Group Visualization:** Standardized anatomical tracking (e.g., "Front Deltoids") featuring multiple main/secondary muscle selections and interactive front/back body SVG previews.
 *   **🔥 Volume-Load Fatigue Heatmap:** Real-time muscle recovery visualization using a calibrated `weight × reps` volume-load model with time-decay, high-rep bonuses, and per-muscle thresholds.
-*   **🧠 Native Neural Network:** An intelligent On-Device workout generator utilizing a custom-built pure Dart Multi-Layer Perceptron. Synthesizes a local training dataset on-the-fly and runs backpropagation natively to instantly generate personalized workout folders based on split preference, fatigue state, and variety heuristics—without any external ML dependencies or API calls.
+*   **🧠 Needle3 Workout Planner:** Builds workout drafts on-device from recent workout history, selected training splits, familiar and new exercises, and recovery state. Users can flag unavailable equipment and ask for substitutions, then save the plan as a Favorites folder. Needle3's Apache-2.0 Android engine is included; its approximately 35 MB model downloads on the first planning session and stays on-device.
 *   **🔋 Mathematical Recovery Predictor:** A deterministic half-life calculation engine that projects the exact hours and days until heavily taxed muscle groups are fully recovered, deeply integrated directly into the SVG Heatmap UI.
 *   **📅 High-Density Workout History:** Dynamic chronological log organized by year-based selectors with collapsible weekday date cards and dedicated details popups.
 *   **🏠 Live Home-Screen Widget:** Keep your daily progress at a glance with a real-time, interactive Android tally counter widget. Features optimistic UI updates for instant tap responsiveness, manual refresh, and automatic inheritance of the app's custom active theme.
@@ -31,7 +31,7 @@ HybridLog is a high-performance, minimalist fitness tracker designed for the sop
 *   **Framework:** [Flutter](https://flutter.dev/) (3.x)
 *   **Database:** [Isar](https://isar.dev/) - An ultra-fast, cross-platform NoSQL database.
 *   **State Management:** Service-based architecture with Stream-based real-time UI updates.
-*   **Native Integration:** Kotlin-based Android AppWidgets with custom atomic broadcast receivers.
+*   **Native Integration:** Kotlin-based Android AppWidgets and the Apache-2.0 [Needle3](https://github.com/cactus-compute/needle) inference engine.
 
 ---
 
@@ -40,7 +40,7 @@ HybridLog is a high-performance, minimalist fitness tracker designed for the sop
 **Your data belongs to you.**
 *   **Local Only:** HybridLog does not use any cloud backends. All workout history, mileage, and personal metrics are stored strictly on your device using the encrypted Isar database.
 *   **Zero Remote Access:** No user data is ever uploaded, shared, or accessible from GitHub or any remote server.
-*   **Offline First:** Works anywhere.
+*   **Offline First:** Workout logging and planning run locally. The Needle3 model needs an internet connection for its one-time download.
 
 ---
 
