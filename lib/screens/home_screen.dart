@@ -1533,7 +1533,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               else
                 const SizedBox(width: 28), 
               Text('Weekly Breakdown', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black, letterSpacing: -0.5)), 
-              const SizedBox(width: 28), 
+              SpringyButton(
+                onTap: _showSettingsDialog,
+                child: Semantics(
+                  button: true,
+                  label: 'Settings',
+                  child: Icon(Icons.settings, color: isDark ? Colors.grey : Colors.black54, size: 22),
+                ),
+              ),
             ]),
             const SizedBox(height: 16),
             Row(
@@ -1568,9 +1575,21 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               child: ListView(controller: scrollController, padding: EdgeInsets.zero, physics: const ClampingScrollPhysics(), children: [
                 GestureDetector(key: _appDrawerKey, onTap: () { if (_sheetSize < 0.5) _sheetController.animateTo(0.95, duration: const Duration(milliseconds: 300), curve: Curves.easeOut); else _sheetController.animateTo(0.05, duration: const Duration(milliseconds: 300), curve: Curves.easeIn); }, child: Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 8), color: Colors.transparent, child: Center(child: AnimatedRotation(duration: const Duration(milliseconds: 200), turns: _sheetSize > 0.5 ? 0.5 : 0.0, child: Icon(Icons.keyboard_arrow_up, color: isDark ? Colors.grey : Colors.black45, size: 24))))),
                 if (_sheetSize > 0.15) ...[
-                  TabBar(controller: _tabController, indicatorColor: accentRed, labelColor: accentRed, unselectedLabelColor: isDark ? Colors.grey[700] : Colors.grey[400], dividerColor: Colors.transparent, indicatorWeight: 3, tabs: [const Tab(icon: Icon(Icons.fitness_center, size: 28)), Tab(key: _historyTabKey, icon: const Icon(Icons.history, size: 28))]),
+                  TabBar(
+                    controller: _tabController,
+                    indicatorColor: accentRed,
+                    labelColor: accentRed,
+                    unselectedLabelColor: isDark ? Colors.grey[700] : Colors.grey[400],
+                    dividerColor: Colors.transparent,
+                    indicatorWeight: 3,
+                    labelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                    tabs: [
+                      Tab(key: _historyTabKey, icon: const Icon(Icons.calendar_month, size: 22), text: 'All Workouts'),
+                      const Tab(icon: Icon(Icons.fitness_center, size: 22), text: 'Exercises'),
+                    ],
+                  ),
                   const SizedBox(height: 8),
-                  SizedBox(height: MediaQuery.of(context).size.height * 0.8, child: TabBarView(controller: _tabController, children: [_buildAllExercisesTab(scrollController), _buildHistoryTab(scrollController)])),
+                  SizedBox(height: MediaQuery.of(context).size.height * 0.8, child: TabBarView(controller: _tabController, children: [_buildHistoryTab(scrollController), _buildAllExercisesTab(scrollController)])),
                 ],
               ]),
             );
@@ -2004,6 +2023,89 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
+  static const _sessionFrontMuscles = [
+    'chest', 'abs', 'obliques', 'front_deltoids', 'side_deltoids',
+    'biceps', 'bicep_long_head', 'bicep_short_head', 'quads',
+  ];
+  static const _sessionBackMuscles = [
+    'lats', 'lower_back', 'traps', 'back_deltoids', 'triceps',
+    'tricep_long_head', 'glutes', 'hamstrings', 'calves',
+  ];
+
+  Map<String, double> _getWorkoutMuscleVolumes(DailyWorkout workout) {
+    final volumes = <String, double>{};
+    void add(String muscle, double volume) {
+      volumes[muscle] = (volumes[muscle] ?? 0) + volume;
+      final parent = _subMuscleParent[muscle];
+      if (parent != null) volumes[parent] = (volumes[parent] ?? 0) + volume;
+    }
+
+    for (final exercise in workout.exercises) {
+      var volume = 0.0;
+      for (final set in exercise.sets) {
+        volume += (set.weight > 0 ? set.weight : _bodyweightFallback) * set.reps;
+        for (final subSet in set.subSets) {
+          volume += (subSet.weight > 0 ? subSet.weight : _bodyweightFallback) * subSet.reps;
+        }
+      }
+      if (volume == 0) volume = 1;
+      final mains = exercise.targetMuscles.isNotEmpty
+          ? exercise.targetMuscles
+          : (exercise.targetMuscle == null ? <String>[] : [exercise.targetMuscle!]);
+      for (final muscle in mains) {
+        add(muscle, volume);
+      }
+      for (final muscle in exercise.secondaryMuscles) {
+        add(muscle, volume * 0.4);
+      }
+    }
+    return volumes;
+  }
+
+  Widget _buildWorkoutMuscleIcon(DailyWorkout workout, bool isDark) {
+    final volumes = _getWorkoutMuscleVolumes(workout);
+    double total(List<String> muscles) => muscles.fold(0, (sum, muscle) => sum + (volumes[muscle] ?? 0));
+    final isFront = total(_sessionFrontMuscles) >= total(_sessionBackMuscles);
+    final visibleMuscles = isFront ? _sessionFrontMuscles : _sessionBackMuscles;
+    final topMuscles = visibleMuscles.where((muscle) => (volumes[muscle] ?? 0) > 0).toList()
+      ..sort((a, b) => (volumes[b] ?? 0).compareTo(volumes[a] ?? 0));
+    final shownMuscles = topMuscles.take(5).toList();
+    final maxVolume = shownMuscles.isEmpty ? 1.0 : volumes[shownMuscles.first]!;
+    final face = isFront ? 'Front' : 'Back';
+    final summary = shownMuscles.map((muscle) => muscle.replaceAll('_', ' ')).join(', ');
+
+    return Tooltip(
+      message: shownMuscles.isEmpty ? 'No muscle detail logged' : '$face emphasis: $summary',
+      child: Container(
+        width: 54,
+        height: 70,
+        padding: const EdgeInsets.all(5),
+        decoration: BoxDecoration(
+          color: isDark ? bgDarkPurple.withValues(alpha: 0.7) : const Color(0xFFF6F4F2),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.05)),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            SvgPicture.asset(
+              isFront ? 'assets/body_front_base.svg' : 'assets/body_back_base.svg',
+              colorFilter: ColorFilter.mode(isDark ? Colors.white24 : const Color(0xFFC9C5C2), BlendMode.srcIn),
+            ),
+            ...shownMuscles.map((muscle) => SvgPicture.asset(
+              isFront ? 'assets/front_$muscle.svg' : 'assets/back_$muscle.svg',
+              colorFilter: ColorFilter.mode(_getIntensityColor((volumes[muscle]! / maxVolume).clamp(0.2, 1)), BlendMode.srcIn),
+            )),
+            Positioned(
+              bottom: 0,
+              child: Text(face.toUpperCase(), style: TextStyle(color: isDark ? Colors.white54 : Colors.black45, fontSize: 6, fontWeight: FontWeight.bold, letterSpacing: 0.7)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildHistoryTab(ScrollController controller) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final weekdays = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -2130,6 +2232,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                         ),
                                       ),
                                       const SizedBox(width: 8),
+                                      _buildWorkoutMuscleIcon(workout, isDark),
+                                      const SizedBox(width: 4),
                                       const Icon(
                                         Icons.chevron_right,
                                         color: Colors.grey,
