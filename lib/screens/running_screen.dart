@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
 import '../services/database_service.dart';
@@ -10,6 +12,7 @@ import '../services/theme_service.dart';
 import '../widgets/theme_picker_widget.dart';
 import '../main.dart';
 import '../services/tutorial_service.dart';
+import '../widgets/weather_advice_widget.dart';
 
 class RunningScreen extends StatefulWidget {
   final VoidCallback? onNavigateToWorkout;
@@ -23,6 +26,7 @@ class _RunningScreenState extends State<RunningScreen> {
   int _yearlyTotal = 0;
   int _selectedYear = DateTime.now().year;
   bool _isGraphInteracting = false;
+  StreamSubscription<void>? _runningLogSubscription;
 
   final GlobalKey _runningGraphKey = GlobalKey();
   final GlobalKey _runningYearlyHistoryKey = GlobalKey();
@@ -33,10 +37,20 @@ class _RunningScreenState extends State<RunningScreen> {
   void initState() {
     super.initState();
     _calculateYearlyTotal();
+    _runningLogSubscription = DatabaseService().watchRunningLogs().listen(
+      (_) => _calculateYearlyTotal(),
+      onError: (Object error) => debugPrint('Running log refresh failed: $error'),
+    );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkTutorial();
     });
+  }
+
+  @override
+  void dispose() {
+    _runningLogSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _checkTutorial() async {
@@ -231,11 +245,7 @@ class _RunningScreenState extends State<RunningScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    return StreamBuilder<void>(
-      stream: DatabaseService().watchRunningLogs(),
-      builder: (context, _) {
-        _calculateYearlyTotal(); // Refresh total when stream fires
-        return Scaffold(
+    return Scaffold(
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           body: SafeArea(
             child: SingleChildScrollView(
@@ -292,7 +302,6 @@ class _RunningScreenState extends State<RunningScreen> {
                       key: _runningGraphKey,
                       child: RunningBlockGraph(
                       dbService: DatabaseService(),
-                      onChanged: () => _calculateYearlyTotal(),
                       onInteractionChanged: (isInteracting) {
                         setState(() => _isGraphInteracting = isInteracting);
                       },
@@ -300,6 +309,10 @@ class _RunningScreenState extends State<RunningScreen> {
                     ),
                   ),
                   
+                  const SizedBox(height: 24),
+
+                  const WeatherAdviceWidget(),
+
                   const SizedBox(height: 24),
 
                   LegoPop(
@@ -324,7 +337,5 @@ class _RunningScreenState extends State<RunningScreen> {
             ),
           ),
         );
-      }
-    );
   }
 }

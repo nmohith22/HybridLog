@@ -22,7 +22,7 @@ Steel is HybridLog's name for its bundled, on-device Needle3 workout assistant. 
 
 ## Session context
 
-The data assistant keeps at most four recent exchanges in memory while its dialog is open. It trims each context entry to 300 characters and sends that context only to the on-device model. Closing the dialog discards it. Names are used only when the user provides them in the session; they are not saved as profile data.
+The data assistant keeps at most ten recent exchanges in memory while its dialog is open and shows the exchange count beside the request field. It trims each context entry to 300 characters and sends that context only to the on-device model. Older exchanges roll off as new ones are added. Closing the dialog discards the session memory. Names are used only when the user provides them in the session; they are not saved as profile data.
 
 ## Guidance used
 

@@ -18,12 +18,18 @@ class NeedleDataDialog extends StatefulWidget {
 }
 
 class _NeedleDataDialogState extends State<NeedleDataDialog> {
+  static const _maxSessionExchanges = 10;
   final _requestController = TextEditingController();
   NeedleDataAction? _action;
   bool _working = false;
   String? _message;
   bool _error = false;
   final _sessionHistory = <Map<String, String>>[];
+  int _exchangeCount = 0;
+
+  String get _sessionMemoryLabel => _exchangeCount <= _maxSessionExchanges
+      ? '$_exchangeCount/$_maxSessionExchanges exchanges in memory'
+      : 'Remembering the last $_maxSessionExchanges of $_exchangeCount exchanges';
 
   AppTheme get _theme => ThemeService().getResolvedTheme(context);
 
@@ -122,10 +128,11 @@ class _NeedleDataDialogState extends State<NeedleDataDialog> {
   }
 
   void _rememberExchange(String request, String response) {
+    _exchangeCount++;
     _sessionHistory
       ..add({'role': 'user', 'content': _limitContext(request)})
       ..add({'role': 'assistant', 'content': _limitContext(response)});
-    while (_sessionHistory.length > 8) {
+    while (_sessionHistory.length > _maxSessionExchanges * 2) {
       _sessionHistory.removeAt(0);
     }
   }
@@ -240,6 +247,8 @@ class _NeedleDataDialogState extends State<NeedleDataDialog> {
                 decoration: InputDecoration(
                   hintText: 'For example: add an exercise called Incline Press',
                   hintStyle: TextStyle(color: theme.subText),
+                  helperText: _sessionMemoryLabel,
+                  helperStyle: TextStyle(color: theme.subText, fontSize: 11),
                   filled: true,
                   fillColor: theme.background,
                   border: OutlineInputBorder(
