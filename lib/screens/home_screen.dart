@@ -14,13 +14,9 @@ import '../widgets/lego_animations.dart';
 import 'exercise_history_screen.dart';
 import '../services/recovery_predictor.dart';
 import '../services/progression_service.dart';
-import '../services/needle_workout_service.dart';
-import '../widgets/steel_log_draft_dialog.dart';
-import '../widgets/steel_history_question_dialog.dart';
-import '../widgets/steel_weekly_recap_dialog.dart';
 import '../widgets/needle_workout_dialog.dart';
 import '../widgets/front_back_heatmap_fade.dart';
-import '../widgets/steel_prompt_dialog.dart';
+import '../widgets/steel_chat_dialog.dart';
 import '../services/tutorial_service.dart';
 import '../utils/weight_reps_format.dart';
 
@@ -1749,21 +1745,19 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Future<void> _showAIGeneratorDialog() async {
-    final prompt = await SteelPromptDialog.show(context);
-    if (!mounted || prompt == null) return;
-    switch (prompt) {
-      case 'plan':
-        _showWorkoutPlannerDialog();
-        break;
-      case 'log':
-        await _showSteelLogDraftDialog();
-        break;
-      case 'history':
-        _showSteelHistoryDialog();
-        break;
-      case 'recap':
-        _showWeeklyRecapDialog();
-        break;
+    final result = await showDialog<SteelChatDialogResult>(
+      context: context,
+      builder: (_) => SteelChatDialog(onDataChanged: () {
+        _refreshData();
+        _loadRecentMuscles();
+      }),
+    );
+    if (!mounted || result == null) return;
+    if (result.openPlanner) {
+      _showWorkoutPlannerDialog();
+    } else if (result.draft != null) {
+      await _openLoggingSheet(result.draft!.exercise,
+          draftSets: result.draft!.sets);
     }
   }
 
@@ -1784,30 +1778,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         SnackBar(content: Text('Saved $folderName to favorites.')),
       );
     });
-  }
-
-  Future<void> _showSteelLogDraftDialog() async {
-    final draft = await showDialog<WorkoutLogDraft>(
-      context: context,
-      builder: (_) => const SteelLogDraftDialog(),
-    );
-    if (draft != null && mounted) {
-      await _openLoggingSheet(draft.exercise, draftSets: draft.sets);
-    }
-  }
-
-  void _showSteelHistoryDialog() {
-    showDialog<void>(
-      context: context,
-      builder: (_) => const SteelHistoryQuestionDialog(),
-    );
-  }
-
-  void _showWeeklyRecapDialog() {
-    showDialog<void>(
-      context: context,
-      builder: (_) => const SteelWeeklyRecapDialog(),
-    );
   }
 
   Widget _buildMainScreenFavorites(double scrollOffset, double viewportHeight) {

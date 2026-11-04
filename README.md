@@ -6,7 +6,8 @@ HybridLog is an Android app for tracking strength workouts and running.
 
 - Log strength workouts, sets, weight, and reps; organize favorite exercises into folders.
 - Browse workout history with session muscle heatmaps and recovery estimates.
-- Use Steel, the bundled Needle3 assistant, in a themed chat modal to plan workouts from history and equipment, draft logs from plain text, ask history questions, or get weekly recaps and progression suggestions.
+- Chat with Steel in plain language. Its on-device Needle3 model answers from locally retrieved workout data, prepares log drafts for review, and can propose app-data changes for approval.
+- Use Steel to plan workouts from history and equipment, ask about past sessions, and get weekly recaps and progression suggestions.
 - Save unavailable equipment locally so workout plans can account for the user's equipment profile.
 - Ask Steel to read, create, update, or delete exercises, folders, workouts, and runs. Changes require approval; deletion also requires a checked confirmation.
 - Track runs, see live conditions and sunrise/sunset for a saved city, and update the Android home-screen widget.

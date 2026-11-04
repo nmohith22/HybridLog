@@ -158,7 +158,7 @@ class NeedleWorkoutService {
     }
     final request = jsonEncode({
       'task':
-          'Parse the workout the user says they performed. This is draft preparation only, not a request to change stored data. Return only JSON with exercise_name and sets containing weight and reps. Do not invent missing values; use weight 0 only when the user clearly means bodyweight.',
+          'Prepare a draft only; never save it. If the user gave one exercise and all its set weights and reps, call draft_workout_log with one exact exercise_library name, weight in pounds, and integer reps. Use weight 0 only for clearly stated bodyweight. If an exercise or a value is missing or unclear, call answer_user and ask one brief clarification. Do not call manage_data for a log draft.',
       'user_text': userText,
       'exercise_library':
           exerciseLibrary.map((exercise) => exercise.name).toList(),
@@ -170,6 +170,22 @@ class NeedleWorkoutService {
       },
     });
     final raw = await completeLocally(request);
+    final decoded = jsonDecode(raw);
+    if (decoded is Map && decoded['function_calls'] is List) {
+      final calls = decoded['function_calls'] as List;
+      final answer = calls
+          .whereType<Map>()
+          .where((call) => call['name'] == 'answer_user')
+          .firstOrNull;
+      if (answer != null) {
+        final arguments = answer['arguments'];
+        final parsed = arguments is String ? jsonDecode(arguments) : arguments;
+        final response = parsed is Map ? parsed['response'] : null;
+        if (response is String && response.trim().isNotEmpty) {
+          throw FormatException(response.trim());
+        }
+      }
+    }
     return parseWorkoutLogResponse(raw, exerciseLibrary);
   }
 
@@ -188,7 +204,7 @@ class NeedleWorkoutService {
         data['exercise_name'] is! String ||
         data['sets'] is! List) {
       throw const FormatException(
-          'Steel returned an incomplete workout draft.');
+          'Steel couldn’t prepare a draft. Tell it one exercise and the weight and reps for each set.');
     }
     final name = (data['exercise_name'] as String).trim();
     Exercise? exercise;
@@ -238,6 +254,15 @@ class NeedleWorkoutService {
     final calls = decoded['function_calls'];
     if (calls is! List) return null;
     for (final call in calls) {
+      if (call is Map && call['name'] == 'draft_workout_log') {
+        final arguments = call['arguments'];
+        final draft = arguments is String ? jsonDecode(arguments) : arguments;
+        if (draft is Map &&
+            draft['exercise_name'] is String &&
+            draft['sets'] is List) {
+          return Map<String, dynamic>.from(draft);
+        }
+      }
       if (call is! Map || call['name'] != 'manage_data') continue;
       final arguments = call['arguments'];
       final action = arguments is String ? jsonDecode(arguments) : arguments;
@@ -347,6 +372,11 @@ class NeedleWorkoutService {
         await _channel.invokeMethod<String>('complete', {'input': request});
     final action = _parseDataAction(raw ?? '');
     return _verifyDataAction(db, action);
+  }
+
+  static Future<NeedleDataAction> validateProposedDataAction(String raw) async {
+    final db = await DatabaseService().database;
+    return _verifyDataAction(db, _parseDataAction(raw));
   }
 
   static Future<void> applyApprovedDataAction(NeedleDataAction action) async {
