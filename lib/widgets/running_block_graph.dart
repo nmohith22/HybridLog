@@ -4,6 +4,12 @@ import '../services/database_service.dart';
 import '../services/widget_service.dart';
 import 'lego_animations.dart';
 
+DateTime runningWeekStartFor(DateTime date, int weekOffset) {
+  // Build from calendar dates so a week offset cannot shift at daylight saving time.
+  final monday = DateTime(date.year, date.month, date.day - date.weekday + 1);
+  return DateTime(monday.year, monday.month, monday.day + weekOffset * 7);
+}
+
 class RunningBlockGraph extends StatefulWidget {
   final DatabaseService dbService;
   final VoidCallback? onChanged;
@@ -53,22 +59,23 @@ class _RunningBlockGraphState extends State<RunningBlockGraph> {
   }
 
   DateTime _getStartOfWeek(int offsetFromCurrent) {
-    DateTime now = DateTime.now();
-    DateTime monday = now.subtract(Duration(days: now.weekday - 1));
-    return DateTime(monday.year, monday.month, monday.day).add(Duration(days: offsetFromCurrent * 7));
+    return runningWeekStartFor(DateTime.now(), offsetFromCurrent);
   }
 
   Future<void> _loadWeekData(int weekOffset) async {
     final startOfWeek = _getStartOfWeek(weekOffset);
     final logs = await widget.dbService.getRunningLogsForDateRange(
       startOfWeek, 
-      startOfWeek.add(const Duration(days: 6, hours: 23, minutes: 59))
+      DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day + 7)
+          .subtract(const Duration(microseconds: 1)),
     );
 
     final newBlocks = {for (var i = 0; i < 7; i++) i: 0};
+    final weekDay = DateTime.utc(startOfWeek.year, startOfWeek.month, startOfWeek.day);
     int total = 0;
     for (var log in logs) {
-      int dayIndex = log.date.difference(startOfWeek).inDays;
+      final logDay = DateTime.utc(log.date.year, log.date.month, log.date.day);
+      int dayIndex = logDay.difference(weekDay).inDays;
       if (dayIndex >= 0 && dayIndex < 7) {
         newBlocks[dayIndex] = log.miles;
         total += log.miles;
@@ -89,14 +96,11 @@ class _RunningBlockGraphState extends State<RunningBlockGraph> {
   }
 
   void _updateVerticalDrag(DragUpdateDetails details, int dayIndex, int weekOffset) {
-    _dragAccumulator -= details.primaryDelta ?? details.delta.dy;
-    while (_dragAccumulator >= 20) {
-      _dragAccumulator -= 20;
-      _queueBlockChange(dayIndex, weekOffset, 1);
-    }
-    while (_dragAccumulator <= -20) {
-      _dragAccumulator += 20;
-      _queueBlockChange(dayIndex, weekOffset, -1);
+    _dragAccumulator -= details.primaryDelta ?? 0;
+    if (_dragAccumulator.abs() > 20) {
+      final change = _dragAccumulator > 0 ? 1 : -1;
+      _dragAccumulator = 0;
+      _queueBlockChange(dayIndex, weekOffset, change);
     }
   }
 
@@ -113,10 +117,10 @@ class _RunningBlockGraphState extends State<RunningBlockGraph> {
       _totalMiles += actualDelta;
     });
     _pendingLocalChanges++;
-    final targetDate = _getStartOfWeek(weekOffset).add(Duration(days: dayIndex));
+    final weekStart = _getStartOfWeek(weekOffset);
+    final targetDate = DateTime(weekStart.year, weekStart.month, weekStart.day + dayIndex);
     _saveQueue = _saveQueue.then((_) async {
       await widget.dbService.saveRunningBlock(targetDate, actualDelta);
-      await WidgetService.updateRunningWidget();
       widget.onChanged?.call();
     }).catchError((Object error) {
       debugPrint('Could not save running block: $error');
@@ -124,6 +128,9 @@ class _RunningBlockGraphState extends State<RunningBlockGraph> {
       _pendingLocalChanges--;
       if (mounted && _pendingLocalChanges == 0) {
         _loadWeekData(_currentWeekOffset - 1000);
+        unawaited(WidgetService.updateRunningWidget().catchError((Object error) {
+          debugPrint('Could not update running widget: $error');
+        }));
       }
     });
   }
@@ -155,7 +162,7 @@ class _RunningBlockGraphState extends State<RunningBlockGraph> {
           itemBuilder: (context, pageIndex) {
             int offset = pageIndex - 1000;
             final startOfWeek = _getStartOfWeek(offset);
-            final endOfWeek = startOfWeek.add(const Duration(days: 6));
+            final endOfWeek = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day + 6);
             final days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
             
             return AnimatedBuilder(

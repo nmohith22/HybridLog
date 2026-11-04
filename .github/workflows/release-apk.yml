@@ -38,6 +38,8 @@ jobs:
       - name: Resolve Flutter packages
         run: flutter pub get
       - name: Run Flutter unit and widget tests
+        env:
+          TZ: America/Chicago
         run: flutter test --reporter expanded
       - uses: actions/setup-python@v5
         with:
