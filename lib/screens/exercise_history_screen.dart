@@ -4,6 +4,7 @@ import 'package:isar/isar.dart';
 import 'package:intl/intl.dart';
 import '../models/fitness_schema.dart';
 import '../services/database_service.dart';
+import '../services/progression_service.dart';
 import '../services/theme_service.dart';
 import '../utils/weight_reps_format.dart';
 
@@ -45,10 +46,11 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = ThemeService().getResolvedTheme(context);
-    final isDark = theme.isDark;
     final textColor = theme.text;
     final bgColor = theme.background;
     final cardColor = theme.card;
+    final progressionSuggestion = ProgressionService.suggestNextTarget(
+        widget.exercise.name, _history);
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -68,10 +70,17 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
                     _buildMetrics(theme),
                     Expanded(
                       child: ListView.builder(
-                        itemCount: _history.length,
+                        itemCount:
+                            _history.length + (progressionSuggestion == null ? 0 : 1),
                         itemBuilder: (context, index) {
+                          if (progressionSuggestion != null && index == 0) {
+                            return _buildProgressionCard(
+                                theme, progressionSuggestion);
+                          }
                           // Reverse the list for display so newest is on top
-                          final workout = _history[_history.length - 1 - index];
+                          final workoutIndex =
+                              index - (progressionSuggestion == null ? 0 : 1);
+                          final workout = _history[_history.length - 1 - workoutIndex];
                           final loggedEx = workout.exercises.firstWhere((e) => e.exerciseName == widget.exercise.name);
                           
                           return Container(
@@ -128,6 +137,50 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
                     ),
                   ],
                 ),
+    );
+  }
+
+  Widget _buildProgressionCard(AppTheme theme, ProgressionSuggestion suggestion) {
+    String formatWeight(double weight) =>
+        weight % 1 == 0 ? weight.toInt().toString() : weight.toString();
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.accent.withOpacity(.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('NEXT TIME', style: TextStyle(color: theme.accent, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1)),
+          const SizedBox(height: 5),
+          Text(formatWeightReps(suggestion.weight, suggestion.reps),
+              style: TextStyle(color: theme.text, fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(suggestion.rationale, style: TextStyle(color: theme.subText, fontSize: 12)),
+          if (suggestion.supportingSessions.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            ...suggestion.supportingSessions.map((session) => Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    '${DateFormat('MMM d').format(session.date)} · ${formatWeight(session.topWeight)} lbs x ${session.topWeightReps} reps at top weight',
+                    style: TextStyle(color: theme.subText, fontSize: 11),
+                  ),
+                )),
+          ],
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => Navigator.of(context).pop(suggestion),
+              icon: const Icon(Icons.arrow_forward, size: 16),
+              label: const Text('Use target in logger'),
+              style: TextButton.styleFrom(foregroundColor: theme.accent),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

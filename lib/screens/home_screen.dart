@@ -13,6 +13,11 @@ import '../main.dart';
 import '../widgets/lego_animations.dart';
 import 'exercise_history_screen.dart';
 import '../services/recovery_predictor.dart';
+import '../services/progression_service.dart';
+import '../services/needle_workout_service.dart';
+import '../widgets/steel_log_draft_dialog.dart';
+import '../widgets/steel_history_question_dialog.dart';
+import '../widgets/steel_weekly_recap_dialog.dart';
 import '../widgets/needle_workout_dialog.dart';
 import '../widgets/front_back_heatmap_fade.dart';
 import '../services/tutorial_service.dart';
@@ -419,14 +424,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   @override
   void dispose() { _tabController.dispose(); _sheetController.dispose(); _mainScrollController.dispose(); _libraryScrollController.dispose(); _searchController.dispose(); super.dispose(); }
 
-  Future<void> _openLoggingSheet(Exercise exercise, {DailyWorkout? editWorkout, int? editExIndex, DateTime? targetDate}) async {
+  Future<void> _openLoggingSheet(Exercise exercise, {DailyWorkout? editWorkout, int? editExIndex, DateTime? targetDate, ProgressionSuggestion? progression, List<SetLog>? draftSets}) async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? cardPurple : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
 
-    double defaultWeight = 0.0;
-    int defaultReps = 10;
-    if (editWorkout == null) {
+    double defaultWeight = progression?.weight ?? 0.0;
+    int defaultReps = progression?.reps ?? 10;
+    if (draftSets != null && draftSets.isNotEmpty) {
+      defaultWeight = draftSets.first.weight;
+      defaultReps = draftSets.first.reps;
+    }
+    if (editWorkout == null && progression == null && draftSets == null) {
       try {
         final db = await DatabaseService().database;
         final lastWorkout = await db.dailyWorkouts
@@ -451,6 +460,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     if (editWorkout != null && editExIndex != null) {
       final existingEx = editWorkout.exercises[editExIndex];
       currentSets = existingEx.sets.map((s) => SetLog()..reps = s.reps..weight = s.weight..subSets = s.subSets.map((sub) => SubSetLog()..reps = sub.reps..weight = sub.weight).toList()..restPauseSeconds = s.restPauseSeconds).toList();
+    } else if (draftSets != null) {
+      currentSets = draftSets.map((set) => SetLog()..reps = set.reps..weight = set.weight).toList();
     } else { currentSets = [SetLog()..reps = defaultReps..weight = defaultWeight]; }
 
     final mainMuscles = exercise.targetMuscles.isNotEmpty ? exercise.targetMuscles : [exercise.targetMuscle];
@@ -471,6 +482,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(exercise.name, style: TextStyle(color: textColor, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
                     Text('Primary: ${mainMuscles.map((m) => m.replaceAll('_', ' ')).join(', ').toUpperCase()}', style: TextStyle(color: accentRed, fontSize: 14, fontWeight: FontWeight.w600)),
+                    if (draftSets != null)
+                      const Text('STEEL DRAFT · REVIEW SETS BEFORE SAVING', style: TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.7)),
                   ])),
                   Column(children: [
                     IconButton(iconSize: 28, onPressed: () async {
@@ -479,7 +492,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     }, icon: const Icon(Icons.calendar_today, color: Colors.grey)),
                     IconButton(iconSize: 28, onPressed: () {
                       Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => ExerciseHistoryScreen(exercise: exercise)));
+                      Navigator.push<ProgressionSuggestion>(this.context, MaterialPageRoute(builder: (context) => ExerciseHistoryScreen(exercise: exercise))).then((target) {
+                        if (target != null && mounted) _openLoggingSheet(exercise, progression: target);
+                      });
                     }, icon: const Icon(Icons.history, color: Colors.blueAccent)),
                     IconButton(icon: const Icon(Icons.add_circle, color: Colors.deepOrange, size: 32), onPressed: () => setModalState(() => currentSets.add(SetLog()..reps = defaultReps..weight = defaultWeight))),
                   ])
@@ -496,8 +511,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       children: [
                         Row(children: [
                           Expanded(flex: 1, child: Text('${index + 1}', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold))),
-                          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8.0), child: TextFormField(initialValue: currentSets[index].weight == defaultWeight && editWorkout == null ? '' : (currentSets[index].weight % 1 == 0 ? currentSets[index].weight.toInt().toString() : currentSets[index].weight.toString()), keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'(^\d*\.?\d*)'))], style: TextStyle(color: textColor, fontWeight: FontWeight.bold), decoration: InputDecoration(filled: true, fillColor: isDark ? bgDarkPurple : Colors.grey[100], hintText: weightHint, hintStyle: const TextStyle(color: Colors.grey), suffixText: 'lbs', suffixStyle: const TextStyle(color: Colors.grey, fontSize: 14), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)), onChanged: (v) => currentSets[index].weight = double.tryParse(v) ?? 0.0))),
-                          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8.0), child: TextFormField(initialValue: currentSets[index].reps == defaultReps && editWorkout == null ? '' : currentSets[index].reps.toString(), keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], style: TextStyle(color: textColor, fontWeight: FontWeight.bold), decoration: InputDecoration(filled: true, fillColor: isDark ? bgDarkPurple : Colors.grey[100], hintText: repsHint, hintStyle: const TextStyle(color: Colors.grey), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)), onChanged: (v) => currentSets[index].reps = int.tryParse(v) ?? 0))),
+                          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8.0), child: TextFormField(initialValue: currentSets[index].weight == defaultWeight && editWorkout == null && progression == null && draftSets == null ? '' : (currentSets[index].weight % 1 == 0 ? currentSets[index].weight.toInt().toString() : currentSets[index].weight.toString()), keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'(^\d*\.?\d*)'))], style: TextStyle(color: textColor, fontWeight: FontWeight.bold), decoration: InputDecoration(filled: true, fillColor: isDark ? bgDarkPurple : Colors.grey[100], hintText: weightHint, hintStyle: const TextStyle(color: Colors.grey), suffixText: 'lbs', suffixStyle: const TextStyle(color: Colors.grey, fontSize: 14), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)), onChanged: (v) => currentSets[index].weight = double.tryParse(v) ?? 0.0))),
+                          Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8.0), child: TextFormField(initialValue: currentSets[index].reps == defaultReps && editWorkout == null && progression == null && draftSets == null ? '' : currentSets[index].reps.toString(), keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], style: TextStyle(color: textColor, fontWeight: FontWeight.bold), decoration: InputDecoration(filled: true, fillColor: isDark ? bgDarkPurple : Colors.grey[100], hintText: repsHint, hintStyle: const TextStyle(color: Colors.grey), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)), onChanged: (v) => currentSets[index].reps = int.tryParse(v) ?? 0))),
                         ]),
                         // SubSets (Dropsets/Supersets)
                         ...List.generate(currentSets[index].subSets.length, (subIndex) => Padding(
@@ -565,7 +580,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       dailyLog.exercises = List.from(dailyLog.exercises)..add(loggedEx); await db.dailyWorkouts.put(dailyLog);
                     }); }
                     _loadRecentMuscles(); Navigator.pop(context); _refreshData(); 
-                  }, child: Text(editWorkout != null ? 'Update Log' : 'Log Workout', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)))),
+                  }, child: Text(editWorkout != null ? 'Update Log' : (draftSets != null ? 'Save reviewed log' : 'Log Workout'), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)))),
                 ]),
                 const SizedBox(height: 24),
               ],
@@ -751,7 +766,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       ),
                       onPressed: () {
                         Navigator.pop(context);
-                        Navigator.push(context, MaterialPageRoute(builder: (context) => ExerciseHistoryScreen(exercise: ex)));
+                        Navigator.push<ProgressionSuggestion>(this.context, MaterialPageRoute(builder: (context) => ExerciseHistoryScreen(exercise: ex))).then((target) {
+                          if (target != null && mounted) _openLoggingSheet(ex, progression: target);
+                        });
                       },
                       icon: const Icon(Icons.analytics, color: Colors.white),
                       label: const Text('Detailed View', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
@@ -1556,7 +1573,32 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Text('FAVORITES', style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.0)), 
             Row(children: [
-              IconButton(onPressed: _showAIGeneratorDialog, icon: Icon(Icons.auto_awesome, color: accentRed, size: 24)),
+              PopupMenuButton<String>(
+                tooltip: 'Steel features',
+                icon: Icon(Icons.auto_awesome, color: accentRed, size: 24),
+                onSelected: (action) {
+                  switch (action) {
+                    case 'plan':
+                      _showAIGeneratorDialog();
+                      break;
+                    case 'log':
+                      _showSteelLogDraftDialog();
+                      break;
+                    case 'history':
+                      _showSteelHistoryDialog();
+                      break;
+                    case 'recap':
+                      _showWeeklyRecapDialog();
+                      break;
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(value: 'plan', child: Text('Plan a workout')),
+                  PopupMenuItem(value: 'log', child: Text('Log in plain language')),
+                  PopupMenuItem(value: 'history', child: Text('Ask my workout history')),
+                  PopupMenuItem(value: 'recap', child: Text('Weekly training recap')),
+                ],
+              ),
               IconButton(key: _createFolderKey, onPressed: _showCreateFolderDialog, icon: Icon(Icons.create_new_folder, color: isDark ? Colors.grey : Colors.black54, size: 24)),
             ])
           ]))),
@@ -1742,6 +1784,30 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         SnackBar(content: Text('Saved $folderName to favorites.')),
       );
     });
+  }
+
+  Future<void> _showSteelLogDraftDialog() async {
+    final draft = await showDialog<WorkoutLogDraft>(
+      context: context,
+      builder: (_) => const SteelLogDraftDialog(),
+    );
+    if (draft != null && mounted) {
+      await _openLoggingSheet(draft.exercise, draftSets: draft.sets);
+    }
+  }
+
+  void _showSteelHistoryDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (_) => const SteelHistoryQuestionDialog(),
+    );
+  }
+
+  void _showWeeklyRecapDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (_) => const SteelWeeklyRecapDialog(),
+    );
   }
 
   Widget _buildMainScreenFavorites(double scrollOffset, double viewportHeight) {

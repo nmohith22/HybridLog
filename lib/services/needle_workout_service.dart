@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models/fitness_schema.dart';
 import 'database_service.dart';
+import 'equipment_profile_service.dart';
 import 'widget_service.dart';
 
 class NeedleDataAction {
@@ -23,6 +24,13 @@ class NeedleDataAction {
     required this.record,
     required this.summary,
   });
+}
+
+class WorkoutLogDraft {
+  final Exercise exercise;
+  final List<SetLog> sets;
+
+  const WorkoutLogDraft({required this.exercise, required this.sets});
 }
 
 class NeedleWorkoutService {
@@ -136,6 +144,124 @@ class NeedleWorkoutService {
 
   static Future<void> resetConversation() =>
       _channel.invokeMethod<void>('reset');
+
+  static Future<String> completeLocally(String input) async =>
+      await _channel.invokeMethod<String>('complete', {'input': input}) ?? '';
+
+  static Future<WorkoutLogDraft> parseWorkoutLog(
+    String userText,
+    List<Exercise> exerciseLibrary,
+  ) async {
+    if (userText.trim().length > 500) {
+      throw const FormatException(
+          'Keep the workout description under 500 characters.');
+    }
+    final request = jsonEncode({
+      'task':
+          'Parse the workout the user says they performed. This is draft preparation only, not a request to change stored data. Return only JSON with exercise_name and sets containing weight and reps. Do not invent missing values; use weight 0 only when the user clearly means bodyweight.',
+      'user_text': userText,
+      'exercise_library':
+          exerciseLibrary.map((exercise) => exercise.name).toList(),
+      'output_shape': {
+        'exercise_name': 'one exact name from exercise_library',
+        'sets': [
+          {'weight': 'number in pounds', 'reps': 'integer'}
+        ],
+      },
+    });
+    final raw = await completeLocally(request);
+    return parseWorkoutLogResponse(raw, exerciseLibrary);
+  }
+
+  static WorkoutLogDraft parseWorkoutLogResponse(
+    String raw,
+    List<Exercise> exerciseLibrary,
+  ) {
+    final start = raw.indexOf('{');
+    final end = raw.lastIndexOf('}');
+    if (start < 0 || end < start) {
+      throw const FormatException('Steel could not read the workout details.');
+    }
+    final decoded = jsonDecode(raw.substring(start, end + 1));
+    final data = decoded is Map ? _workoutLogData(decoded) : null;
+    if (data == null ||
+        data['exercise_name'] is! String ||
+        data['sets'] is! List) {
+      throw const FormatException(
+          'Steel returned an incomplete workout draft.');
+    }
+    final name = (data['exercise_name'] as String).trim();
+    Exercise? exercise;
+    for (final candidate in exerciseLibrary) {
+      if (candidate.name.toLowerCase() == name.toLowerCase()) {
+        exercise = candidate;
+        break;
+      }
+    }
+    if (exercise == null) {
+      throw const FormatException(
+          'That exercise is not in your exercise library yet.');
+    }
+    final rawSets = data['sets'] as List;
+    if (rawSets.isEmpty || rawSets.length > 20) {
+      throw const FormatException('A workout draft must contain 1 to 20 sets.');
+    }
+    final sets = <SetLog>[];
+    for (final value in rawSets) {
+      if (value is! Map) {
+        throw const FormatException('Steel returned an invalid set.');
+      }
+      final weight = value['weight'];
+      final reps = value['reps'];
+      if (weight is! num ||
+          !weight.isFinite ||
+          weight < 0 ||
+          weight > 2000 ||
+          reps is! num ||
+          reps != reps.roundToDouble() ||
+          reps < 1 ||
+          reps > 100) {
+        throw const FormatException(
+            'Check the weight and rep count in your request.');
+      }
+      sets.add(SetLog()
+        ..weight = weight.toDouble()
+        ..reps = reps.toInt());
+    }
+    return WorkoutLogDraft(exercise: exercise, sets: List.unmodifiable(sets));
+  }
+
+  static Map<String, dynamic>? _workoutLogData(Map decoded) {
+    if (decoded['exercise_name'] is String && decoded['sets'] is List) {
+      return Map<String, dynamic>.from(decoded);
+    }
+    final calls = decoded['function_calls'];
+    if (calls is! List) return null;
+    for (final call in calls) {
+      if (call is! Map || call['name'] != 'manage_data') continue;
+      final arguments = call['arguments'];
+      final action = arguments is String ? jsonDecode(arguments) : arguments;
+      if (action is! Map ||
+          action['operation'] != 'create' ||
+          action['record_type'] != 'workout' ||
+          action['record'] is! Map) continue;
+      final exercises = action['record']['exercises'];
+      if (exercises is! List ||
+          exercises.length != 1 ||
+          exercises.single is! Map) {
+        continue;
+      }
+      final exercise = exercises.single as Map;
+      final sets = exercise['sets'];
+      final name = exercise['name'] ??
+          exercise['exercise_name'] ??
+          exercise['exerciseName'];
+      if (name is String && sets is List) {
+        return {'exercise_name': name, 'sets': sets};
+      }
+    }
+    return null;
+  }
 
   static Future<NeedleDataAction> proposeDataAction(
     String userRequest, {
@@ -623,6 +749,7 @@ class NeedleWorkoutService {
     required bool includeNewExercises,
     required Map<String, double> fatigue,
     required Set<String> unavailable,
+    Set<String> unavailableEquipment = const {},
     List<Exercise> currentPlan = const [],
   }) async {
     final used = <String, int>{};
@@ -640,6 +767,9 @@ class NeedleWorkoutService {
           (used[exercise.name] ?? 0) > 0;
       if (!includeNewExercises && !familiar) return false;
       if (unavailable.contains(exercise.name)) return false;
+      final equipment =
+          EquipmentProfileService.categoriesForExercise(exercise.name);
+      if (equipment.any(unavailableEquipment.contains)) return false;
       return _matchesSplit(exercise, splits);
     }).toList();
     if (eligible.isEmpty) return const [];
@@ -678,7 +808,10 @@ class NeedleWorkoutService {
           .where((entry) => entry.value >= 0.2)
           .map((entry) => {'muscle': entry.key, 'level': entry.value})
           .toList(),
-      'unavailable': unavailable.toList(),
+      'unavailable': [
+        ...unavailable.toList(),
+        ...unavailableEquipment.toList()
+      ],
       'candidates': candidateSummary,
     });
     final raw =

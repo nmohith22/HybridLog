@@ -3,6 +3,7 @@ import 'package:isar/isar.dart';
 
 import '../models/fitness_schema.dart';
 import '../services/database_service.dart';
+import '../services/equipment_profile_service.dart';
 import '../services/needle_workout_service.dart';
 import '../services/theme_service.dart';
 import 'needle_data_dialog.dart';
@@ -42,9 +43,11 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
   final _folderController = TextEditingController();
   final _selectedSplits = <String>{'Fullbody'};
   final _unavailable = <String>{};
+  final _unavailableEquipment = <String>{};
   List<Exercise> _plan = [];
   bool _includeNew = true;
   bool _working = false;
+  bool _equipmentLoaded = false;
   int _received = 0;
   int _total = -1;
   String? _error;
@@ -56,6 +59,18 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
     super.initState();
     final now = DateTime.now();
     _folderController.text = 'Steel Workout ${now.month}/${now.day}';
+    _loadEquipmentProfile();
+  }
+
+  Future<void> _loadEquipmentProfile() async {
+    try {
+      final unavailable = await EquipmentProfileService.loadUnavailable();
+      if (mounted) _unavailableEquipment.addAll(unavailable);
+    } catch (_) {
+      // Keep planning available if local preferences cannot be read.
+    } finally {
+      if (mounted) setState(() => _equipmentLoaded = true);
+    }
   }
 
   @override
@@ -91,6 +106,7 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
         includeNewExercises: _includeNew,
         fatigue: widget.fatigue,
         unavailable: _unavailable,
+        unavailableEquipment: _unavailableEquipment,
         currentPlan: revise ? _plan : const [],
       );
       if (!mounted) return;
@@ -135,19 +151,80 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
   }
 
   String _equipment(String name) {
-    final value = name.toLowerCase();
-    if (value.contains('cable')) return 'Cable machine';
-    if (value.contains('machine') ||
-        value.contains('pec deck') ||
-        value.contains('smith')) return 'Weight machine';
-    if (value.contains('barbell') ||
-        value.contains('deadlift') ||
-        value.contains('squat')) return 'Barbell';
-    if (value.contains('dumbbell')) return 'Dumbbells';
-    if (value.contains('bench')) return 'Bench';
-    if (value.contains('pull-up') || value.contains('chin-up'))
-      return 'Pull-up bar';
-    return 'Equipment / movement';
+    final categories = EquipmentProfileService.categoriesForExercise(name);
+    return categories.isEmpty ? 'Equipment / movement' : categories.join(' + ');
+  }
+
+  Future<void> _editEquipmentProfile() async {
+    final unavailable = Set<String>.from(_unavailableEquipment);
+    final result = await showDialog<Set<String>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: _theme.card,
+          title:
+              Text('Equipment profile', style: TextStyle(color: _theme.text)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Turn off equipment you cannot use. Steel will remember this on this device and use it in future plans.',
+                  style: TextStyle(color: _theme.subText),
+                ),
+                const SizedBox(height: 8),
+                ...EquipmentProfileService.categories
+                    .map((category) => SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          activeThumbColor: _theme.accent,
+                          title: Text(category,
+                              style:
+                                  TextStyle(color: _theme.text, fontSize: 13)),
+                          value: !unavailable.contains(category),
+                          onChanged: (available) => setDialogState(() {
+                            if (available) {
+                              unavailable.remove(category);
+                            } else {
+                              unavailable.add(category);
+                            }
+                          }),
+                        )),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text('Cancel', style: TextStyle(color: _theme.subText)),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: _theme.accent),
+              onPressed: () => Navigator.pop(dialogContext, unavailable),
+              child: Text('Save profile',
+                  style: TextStyle(color: _theme.background)),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result == null) return;
+    try {
+      await EquipmentProfileService.saveUnavailable(result);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Could not save the equipment profile on this device.')));
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _unavailableEquipment
+          ..clear()
+          ..addAll(result);
+        _plan.clear();
+      });
+    }
   }
 
   @override
@@ -285,6 +362,22 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
                               _unavailable.clear();
                             }),
                           ),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: OutlinedButton.icon(
+                              onPressed: _editEquipmentProfile,
+                              icon: const Icon(Icons.fitness_center, size: 16),
+                              label: Text(_unavailableEquipment.isEmpty
+                                  ? 'Set equipment profile'
+                                  : '${_unavailableEquipment.length} equipment limits saved'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: theme.accent,
+                                side: BorderSide(
+                                    color: theme.accent.withValues(alpha: .5)),
+                                textStyle: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ),
                           if (_error != null)
                             Padding(
                                 padding: const EdgeInsets.only(bottom: 10),
@@ -379,12 +472,15 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
                               fontWeight: FontWeight.bold))),
                 if (_plan.isEmpty)
                   FilledButton(
-                      onPressed: _working || _selectedSplits.isEmpty
+                      onPressed: _working ||
+                              !_equipmentLoaded ||
+                              _selectedSplits.isEmpty
                           ? null
                           : _generate,
                       style:
                           FilledButton.styleFrom(backgroundColor: theme.accent),
-                      child: Text('Generate',
+                      child: Text(
+                          _equipmentLoaded ? 'Generate' : 'Loading profile',
                           style: TextStyle(color: theme.background)))
                 else
                   FilledButton(

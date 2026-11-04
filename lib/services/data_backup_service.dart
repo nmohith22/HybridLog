@@ -9,12 +9,13 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models/fitness_schema.dart';
 import 'database_service.dart';
+import 'equipment_profile_service.dart';
 import 'theme_service.dart';
 import 'widget_service.dart';
 
 class DataBackupService {
   static const _format = 'HybridLog';
-  static const _version = 2;
+  static const _version = 3;
   static const _maxImportBytes = 50 * 1024 * 1024;
 
   static Future<String?> exportData() async {
@@ -26,12 +27,15 @@ class DataBackupService {
           await db.dailyWorkouts.where().sortByDateDesc().findAll();
       final runs = await db.runningLogs.where().sortByDateDesc().findAll();
       final folders = await db.workoutFolders.where().sortByName().findAll();
+      final unavailableEquipment =
+          await EquipmentProfileService.loadUnavailable();
 
       final backup = {
         'format': _format,
         'version': _version,
         'exportedAt': DateTime.now().toUtc().toIso8601String(),
         'themeId': ThemeService().currentThemeId,
+        'unavailableEquipment': unavailableEquipment.toList()..sort(),
         'exercises': exercises
             .map((exercise) => {
                   'name': exercise.name,
@@ -125,6 +129,9 @@ class DataBackupService {
       final themeId = backup['themeId'] == null
           ? null
           : _string(backup['themeId'], 'themeId');
+      final unavailableEquipment = backup.containsKey('unavailableEquipment')
+          ? _readEquipment(backup['unavailableEquipment'])
+          : null;
       if (themeId != null &&
           !ThemeService().themes.any((theme) => theme.id == themeId)) {
         throw const FormatException('Backup contains an unknown theme.');
@@ -187,6 +194,9 @@ class DataBackupService {
       });
 
       if (themeId != null) await ThemeService().setTheme(themeId);
+      if (unavailableEquipment != null) {
+        await EquipmentProfileService.saveUnavailable(unavailableEquipment);
+      }
       await WidgetService.updateRunningWidget();
       return null;
     } catch (error) {
@@ -200,6 +210,15 @@ class DataBackupService {
           .map((value) => WorkoutFolder()
             ..name = _string(_asMap(value, 'folder')['name'], 'folder.name'))
           .toList();
+
+  static Set<String> _readEquipment(Object? value) {
+    final items = _stringList(value, 'unavailableEquipment', const []);
+    if (items
+        .any((item) => !EquipmentProfileService.categories.contains(item))) {
+      throw const FormatException('Backup contains an unknown equipment type.');
+    }
+    return items.toSet();
+  }
 
   static List<Exercise> _readExercises(Map<String, dynamic> backup) =>
       _list(backup['exercises'], 'exercises').map((value) {
