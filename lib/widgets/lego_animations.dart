@@ -45,10 +45,7 @@ class _LegoPopState extends State<LegoPop> with SingleTickerProviderStateMixin {
       ),
     );
 
-    final stagger = Duration(
-      milliseconds: 30 * widget.index.clamp(0, 8).toInt(),
-    );
-    Future.delayed(stagger, () {
+    Future.delayed(const Duration(milliseconds: 30) * widget.index, () {
       if (mounted) _controller.forward();
     });
   }

@@ -734,10 +734,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         viewportHeight: viewportHeight,
         baseOffset: baseOffset,
         enabled: useScaling,
-        child: LegoPop(key: ValueKey('exercise-${ex.id}'), index: index, child: cardContent),
+        child: LegoPop(index: index, child: cardContent),
       );
     }
-    return LegoPop(key: ValueKey('exercise-${ex.id}'), index: index ?? 0, child: cardContent);
+    return LegoPop(index: index ?? 0, child: cardContent);
   }
 
   void _showFolderAssignmentDialog(Exercise ex) async {
@@ -1839,7 +1839,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             final exercises = grouped[folder]!;
             return SliverToBoxAdapter(
               child: LegoPop(
-                key: ValueKey('favorite-folder-$folder'),
                 index: folderIndex++,
                 child: Theme(
                   data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -2262,10 +2261,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         final dayOfWeek = weekdays[workout.date.weekday];
                         final exCount = workout.exercises.length;
                         
-                        return LegoPop(
-                          key: ValueKey('history-${workout.id}'),
-                          index: index,
-                          child: Container(
+                        return Container(
                           margin: const EdgeInsets.only(bottom: 12),
                           child: SpringyButton(
                             onTap: () => _showWorkoutDetailsModal(workout),
@@ -2338,7 +2334,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                 ],
                               ),
                             ),
-                          ),
                           ),
                         );
                       },
