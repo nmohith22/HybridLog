@@ -14,6 +14,7 @@ import '../widgets/lego_animations.dart';
 import 'exercise_history_screen.dart';
 import '../services/recovery_predictor.dart';
 import '../widgets/needle_workout_dialog.dart';
+import '../widgets/front_back_heatmap_fade.dart';
 import '../services/tutorial_service.dart';
 import '../utils/weight_reps_format.dart';
 
@@ -2070,27 +2071,17 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   Widget _buildWorkoutMuscleIcon(DailyWorkout workout, bool isDark) {
     final volumes = _getWorkoutMuscleVolumes(workout);
-    double total(List<String> muscles) => muscles.fold(0, (sum, muscle) => sum + (volumes[muscle] ?? 0));
-    final isFront = total(_sessionFrontMuscles) >= total(_sessionBackMuscles);
-    final visibleMuscles = isFront ? _sessionFrontMuscles : _sessionBackMuscles;
-    final topMuscles = visibleMuscles.where((muscle) => (volumes[muscle] ?? 0) > 0).toList()
+    List<String> topMuscles(List<String> muscles) => muscles
+      .where((muscle) => (volumes[muscle] ?? 0) > 0)
+      .toList()
       ..sort((a, b) => (volumes[b] ?? 0).compareTo(volumes[a] ?? 0));
-    final shownMuscles = topMuscles.take(5).toList();
-    final maxVolume = shownMuscles.isEmpty ? 1.0 : volumes[shownMuscles.first]!;
-    final face = isFront ? 'Front' : 'Back';
-    final summary = shownMuscles.map((muscle) => muscle.replaceAll('_', ' ')).join(', ');
 
-    return Tooltip(
-      message: shownMuscles.isEmpty ? 'No muscle detail logged' : '$face emphasis: $summary',
-      child: Container(
-        width: 54,
-        height: 70,
-        padding: const EdgeInsets.all(5),
-        decoration: BoxDecoration(
-          color: isDark ? bgDarkPurple.withValues(alpha: 0.7) : const Color(0xFFF6F4F2),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.05)),
-        ),
+    Widget faceHeatmap({required bool isFront, required List<String> muscles}) {
+      final shownMuscles = muscles.take(5).toList();
+      final maxVolume = shownMuscles.isEmpty ? 1.0 : volumes[shownMuscles.first]!;
+      final face = isFront ? 'Front' : 'Back';
+      return Semantics(
+        label: '$face muscle heatmap',
         child: Stack(
           alignment: Alignment.center,
           children: [
@@ -2107,6 +2098,33 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               child: Text(face.toUpperCase(), style: TextStyle(color: isDark ? Colors.white54 : Colors.black45, fontSize: 6, fontWeight: FontWeight.bold, letterSpacing: 0.7)),
             ),
           ],
+        ),
+      );
+    }
+
+    final frontMuscles = topMuscles(_sessionFrontMuscles);
+    final backMuscles = topMuscles(_sessionBackMuscles);
+    String summary(List<String> muscles) => muscles.take(5)
+      .map((muscle) => muscle.replaceAll('_', ' '))
+      .join(', ');
+    final hasMuscles = frontMuscles.isNotEmpty || backMuscles.isNotEmpty;
+
+    return Tooltip(
+      message: hasMuscles
+          ? 'Front: ${summary(frontMuscles)}\nBack: ${summary(backMuscles)}'
+          : 'No muscle detail logged',
+      child: Container(
+        width: 54,
+        height: 70,
+        padding: const EdgeInsets.all(5),
+        decoration: BoxDecoration(
+          color: isDark ? bgDarkPurple.withValues(alpha: 0.7) : const Color(0xFFF6F4F2),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.05)),
+        ),
+        child: FrontBackHeatmapFade(
+          front: faceHeatmap(isFront: true, muscles: frontMuscles),
+          back: faceHeatmap(isFront: false, muscles: backMuscles),
         ),
       ),
     );
