@@ -17,7 +17,7 @@ class FrontBackHeatmapFade extends StatefulWidget {
 }
 
 class _FrontBackHeatmapFadeState extends State<FrontBackHeatmapFade> {
-  static const _fadeDuration = Duration(milliseconds: 1200);
+  static const _fadeDuration = Duration(milliseconds: 600);
   static const _faceDuration = Duration(seconds: 5);
 
   late final Timer _timer;
@@ -38,14 +38,21 @@ class _FrontBackHeatmapFadeState extends State<FrontBackHeatmapFade> {
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedCrossFade(
-        firstChild: widget.front,
-        secondChild: widget.back,
-        crossFadeState:
-            _showFront ? CrossFadeState.showFirst : CrossFadeState.showSecond,
-        duration: _fadeDuration,
-        firstCurve: Curves.easeInOut,
-        secondCurve: Curves.easeInOut,
-        sizeCurve: Curves.linear,
+  Widget build(BuildContext context) => Stack(
+        alignment: Alignment.center,
+        children: [
+          AnimatedOpacity(
+            opacity: _showFront ? 1 : 0,
+            duration: _fadeDuration,
+            curve: Curves.easeInOut,
+            child: IgnorePointer(ignoring: !_showFront, child: widget.front),
+          ),
+          AnimatedOpacity(
+            opacity: _showFront ? 0 : 1,
+            duration: _fadeDuration,
+            curve: Curves.easeInOut,
+            child: IgnorePointer(ignoring: _showFront, child: widget.back),
+          ),
+        ],
       );
 }

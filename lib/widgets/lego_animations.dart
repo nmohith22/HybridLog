@@ -45,7 +45,10 @@ class _LegoPopState extends State<LegoPop> with SingleTickerProviderStateMixin {
       ),
     );
 
-    Future.delayed(const Duration(milliseconds: 30) * widget.index, () { // Speed up delay from 50ms
+    final stagger = Duration(
+      milliseconds: 30 * widget.index.clamp(0, 8).toInt(),
+    );
+    Future.delayed(stagger, () {
       if (mounted) _controller.forward();
     });
   }
@@ -91,7 +94,8 @@ class SpringyButton extends StatefulWidget {
   State<SpringyButton> createState() => _SpringyButtonState();
 }
 
-class _SpringyButtonState extends State<SpringyButton> with SingleTickerProviderStateMixin {
+class _SpringyButtonState extends State<SpringyButton>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 

@@ -45,6 +45,7 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
   final _unavailable = <String>{};
   final _unavailableEquipment = <String>{};
   List<Exercise> _plan = [];
+  int _planningStep = 0;
   bool _includeNew = true;
   bool _working = false;
   bool _equipmentLoaded = false;
@@ -227,6 +228,137 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
     }
   }
 
+  Widget _chatBubble(AppTheme theme, String text, {bool user = false}) => Align(
+        alignment: user ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color:
+                user ? theme.accent.withValues(alpha: .14) : theme.background,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Text(text, style: TextStyle(color: theme.text, fontSize: 12)),
+        ),
+      );
+
+  Widget _buildPlanningFlow(AppTheme theme) {
+    final focus = _selectedSplits.join(', ');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _chatBubble(theme,
+            'I’ll ask a few quick questions, then use your recent workouts to make a draft. These choices stay within this planning flow.'),
+        if (_planningStep > 0)
+          _chatBubble(theme, 'Workout focus: $focus', user: true),
+        if (_planningStep > 1)
+          _chatBubble(
+            theme,
+            _includeNew
+                ? 'Open to new exercises: yes'
+                : 'Open to new exercises: no',
+            user: true,
+          ),
+        const SizedBox(height: 4),
+        Text(
+          'STEP ${_planningStep + 1} OF 3',
+          style: TextStyle(
+            color: theme.subText,
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
+          ),
+        ),
+        const SizedBox(height: 6),
+        if (_planningStep == 0) ...[
+          _chatBubble(
+              theme, 'What would you like to train? Select one or more.'),
+          Wrap(
+            spacing: 7,
+            runSpacing: 6,
+            children: _splits.map((split) {
+              final selected = _selectedSplits.contains(split);
+              return ChoiceChip(
+                label: Text(split,
+                    style: TextStyle(
+                        color: selected ? theme.background : theme.text,
+                        fontSize: 12)),
+                selected: selected,
+                selectedColor: theme.accent,
+                backgroundColor: theme.background,
+                showCheckmark: false,
+                onSelected: (value) => setState(() {
+                  if (split == 'Fullbody' && value) {
+                    _selectedSplits
+                      ..clear()
+                      ..add(split);
+                  } else {
+                    _selectedSplits.remove('Fullbody');
+                    if (value) {
+                      _selectedSplits.add(split);
+                    } else {
+                      _selectedSplits.remove(split);
+                    }
+                  }
+                }),
+              );
+            }).toList(),
+          ),
+        ] else if (_planningStep == 1) ...[
+          _chatBubble(theme,
+              'Would you like to try exercises you haven’t done before?'),
+          Wrap(
+            spacing: 8,
+            children: [
+              ChoiceChip(
+                label: const Text('Use familiar exercises'),
+                selected: !_includeNew,
+                onSelected: (_) => setState(() => _includeNew = false),
+                selectedColor: theme.accent,
+                backgroundColor: theme.background,
+                labelStyle: TextStyle(
+                    color: !_includeNew ? theme.background : theme.text),
+                showCheckmark: false,
+              ),
+              ChoiceChip(
+                label: const Text('Include new exercises'),
+                selected: _includeNew,
+                onSelected: (_) => setState(() => _includeNew = true),
+                selectedColor: theme.accent,
+                backgroundColor: theme.background,
+                labelStyle: TextStyle(
+                    color: _includeNew ? theme.background : theme.text),
+                showCheckmark: false,
+              ),
+            ],
+          ),
+        ] else ...[
+          _chatBubble(theme, 'Any equipment you don’t have access to?'),
+          Text(
+            'I’ll use the equipment profile saved on this device. You can update it here before I build the plan.',
+            style: TextStyle(color: theme.subText, fontSize: 11),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: _editEquipmentProfile,
+              icon: const Icon(Icons.fitness_center, size: 16),
+              label: Text(_unavailableEquipment.isEmpty
+                  ? 'Review equipment profile'
+                  : '${_unavailableEquipment.length} limits saved'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: theme.accent,
+                side: BorderSide(color: theme.accent.withValues(alpha: .5)),
+                textStyle: const TextStyle(fontSize: 12),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = _theme;
@@ -304,80 +436,7 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('WORKOUT FOCUS',
-                              style: TextStyle(
-                                  color: theme.subText,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1)),
-                          const SizedBox(height: 8),
-                          Wrap(
-                              spacing: 7,
-                              runSpacing: 6,
-                              children: _splits.map((split) {
-                                final selected =
-                                    _selectedSplits.contains(split);
-                                return FilterChip(
-                                  label: Text(split,
-                                      style: TextStyle(
-                                          color: selected
-                                              ? theme.background
-                                              : theme.text,
-                                          fontSize: 12)),
-                                  selected: selected,
-                                  selectedColor: theme.accent,
-                                  backgroundColor: theme.background,
-                                  showCheckmark: false,
-                                  onSelected: (value) => setState(() {
-                                    _plan.clear();
-                                    _unavailable.clear();
-                                    if (split == 'Fullbody' && value) {
-                                      _selectedSplits
-                                        ..clear()
-                                        ..add(split);
-                                    } else {
-                                      _selectedSplits.remove('Fullbody');
-                                      if (value)
-                                        _selectedSplits.add(split);
-                                      else
-                                        _selectedSplits.remove(split);
-                                    }
-                                  }),
-                                );
-                              }).toList()),
-                          SwitchListTile.adaptive(
-                            contentPadding: EdgeInsets.zero,
-                            activeThumbColor: theme.accent,
-                            title: Text('Include exercises I haven’t tried',
-                                style:
-                                    TextStyle(color: theme.text, fontSize: 13)),
-                            subtitle: Text(
-                                'Adds up to a couple of new movements when they fit.',
-                                style: TextStyle(
-                                    color: theme.subText, fontSize: 11)),
-                            value: _includeNew,
-                            onChanged: (value) => setState(() {
-                              _includeNew = value;
-                              _plan.clear();
-                              _unavailable.clear();
-                            }),
-                          ),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: OutlinedButton.icon(
-                              onPressed: _editEquipmentProfile,
-                              icon: const Icon(Icons.fitness_center, size: 16),
-                              label: Text(_unavailableEquipment.isEmpty
-                                  ? 'Set equipment profile'
-                                  : '${_unavailableEquipment.length} equipment limits saved'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: theme.accent,
-                                side: BorderSide(
-                                    color: theme.accent.withValues(alpha: .5)),
-                                textStyle: const TextStyle(fontSize: 12),
-                              ),
-                            ),
-                          ),
+                          if (_plan.isEmpty) _buildPlanningFlow(theme),
                           if (_error != null)
                             Padding(
                                 padding: const EdgeInsets.only(bottom: 10),
@@ -470,7 +529,22 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
                           style: TextStyle(
                               color: theme.accent,
                               fontWeight: FontWeight.bold))),
-                if (_plan.isEmpty)
+                if (_plan.isEmpty && _planningStep > 0)
+                  TextButton(
+                    onPressed:
+                        _working ? null : () => setState(() => _planningStep--),
+                    child: Text('Back', style: TextStyle(color: theme.subText)),
+                  ),
+                if (_plan.isEmpty && _planningStep < 2)
+                  FilledButton(
+                      onPressed: _working || _selectedSplits.isEmpty
+                          ? null
+                          : () => setState(() => _planningStep++),
+                      style:
+                          FilledButton.styleFrom(backgroundColor: theme.accent),
+                      child: Text('Continue',
+                          style: TextStyle(color: theme.background))),
+                if (_plan.isEmpty && _planningStep == 2)
                   FilledButton(
                       onPressed: _working ||
                               !_equipmentLoaded ||
@@ -480,9 +554,11 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
                       style:
                           FilledButton.styleFrom(backgroundColor: theme.accent),
                       child: Text(
-                          _equipmentLoaded ? 'Generate' : 'Loading profile',
-                          style: TextStyle(color: theme.background)))
-                else
+                          _equipmentLoaded
+                              ? 'Build my workout'
+                              : 'Loading profile',
+                          style: TextStyle(color: theme.background))),
+                if (_plan.isNotEmpty)
                   FilledButton(
                       onPressed:
                           _working || _folderController.text.trim().isEmpty

@@ -311,12 +311,12 @@ class _RunningScreenState extends State<RunningScreen> {
                   
                   const SizedBox(height: 24),
 
-                  const WeatherAdviceWidget(),
+                  const LegoPop(index: 1, child: WeatherAdviceWidget()),
 
                   const SizedBox(height: 24),
 
                   LegoPop(
-                    index: 1,
+                    index: 2,
                     child: Container(
                       key: _runningYearlyHistoryKey,
                       child: YearlyHeatmapCalendar(

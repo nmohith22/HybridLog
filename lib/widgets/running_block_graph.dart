@@ -4,6 +4,11 @@ import '../services/database_service.dart';
 import '../services/widget_service.dart';
 import 'lego_animations.dart';
 
+int runningDayIndexAt(double localX, double rowWidth) {
+  if (!localX.isFinite || !rowWidth.isFinite || rowWidth <= 0) return 0;
+  return (localX / rowWidth * 7).floor().clamp(0, 6).toInt();
+}
+
 class RunningBlockGraph extends StatefulWidget {
   final DatabaseService dbService;
   final VoidCallback? onChanged;
@@ -21,6 +26,9 @@ class _RunningBlockGraphState extends State<RunningBlockGraph> {
   Map<int, int> _weeklyBlocks = {for (var i = 0; i < 7; i++) i: 0};
   int _totalMiles = 0;
   double _dragAccumulator = 0.0;
+  int _dragDayIndex = 0;
+  int _pendingLocalChanges = 0;
+  Future<void> _saveQueue = Future<void>.value();
   StreamSubscription? _logSubscription;
 
   @override
@@ -31,7 +39,7 @@ class _RunningBlockGraphState extends State<RunningBlockGraph> {
     
     // Watch database for real-time state sync without full widget rebuilds
     _logSubscription = DatabaseService().watchRunningLogs().listen((_) {
-      _loadWeekData(_currentWeekOffset - 1000);
+      if (_pendingLocalChanges == 0) _loadWeekData(_currentWeekOffset - 1000);
     });
   }
 
@@ -73,7 +81,7 @@ class _RunningBlockGraphState extends State<RunningBlockGraph> {
       }
     }
 
-    if (mounted) {
+    if (mounted && _currentWeekOffset - 1000 == weekOffset) {
       setState(() {
         _weeklyBlocks = newBlocks;
         _totalMiles = total;
@@ -81,24 +89,50 @@ class _RunningBlockGraphState extends State<RunningBlockGraph> {
     }
   }
 
-  Future<void> _handleVerticalDrag(DragUpdateDetails details, int dayIndex, int weekOffset) async {
-    _dragAccumulator -= details.primaryDelta ?? 0;
-    if (_dragAccumulator.abs() > 20) {
-      int change = _dragAccumulator > 0 ? 1 : -1;
-      _dragAccumulator = 0; 
-      int currentMiles = _weeklyBlocks[dayIndex] ?? 0;
-      if (currentMiles + change >= 0 && currentMiles + change <= 20) {
-        // Instant visual update (no animations for miles)
-        setState(() {
-          _weeklyBlocks[dayIndex] = currentMiles + change;
-          _totalMiles += change;
-        });
-        final targetDate = _getStartOfWeek(weekOffset).add(Duration(days: dayIndex));
-        await widget.dbService.saveRunningBlock(targetDate, change);
-        await WidgetService.updateRunningWidget(); 
-        if (widget.onChanged != null) widget.onChanged!();
-      }
+  void _startVerticalDrag(DragStartDetails details, double rowWidth) {
+    _dragAccumulator = 0;
+    _dragDayIndex = runningDayIndexAt(details.localPosition.dx, rowWidth);
+    widget.onInteractionChanged?.call(true);
+  }
+
+  void _updateVerticalDrag(DragUpdateDetails details, int weekOffset) {
+    _dragAccumulator -= details.delta.dy;
+    while (_dragAccumulator >= 20) {
+      _dragAccumulator -= 20;
+      _queueBlockChange(_dragDayIndex, weekOffset, 1);
     }
+    while (_dragAccumulator <= -20) {
+      _dragAccumulator += 20;
+      _queueBlockChange(_dragDayIndex, weekOffset, -1);
+    }
+  }
+
+  void _queueBlockChange(int dayIndex, int weekOffset, int delta) {
+    final current = _weeklyBlocks[dayIndex] ?? 0;
+    final updated = (current + delta).clamp(0, 20).toInt();
+    final actualDelta = updated - current;
+    if (actualDelta == 0) {
+      _dragAccumulator = 0;
+      return;
+    }
+    setState(() {
+      _weeklyBlocks[dayIndex] = updated;
+      _totalMiles += actualDelta;
+    });
+    _pendingLocalChanges++;
+    final targetDate = _getStartOfWeek(weekOffset).add(Duration(days: dayIndex));
+    _saveQueue = _saveQueue.then((_) async {
+      await widget.dbService.saveRunningBlock(targetDate, actualDelta);
+      await WidgetService.updateRunningWidget();
+      widget.onChanged?.call();
+    }).catchError((Object error) {
+      debugPrint('Could not save running block: $error');
+    }).whenComplete(() {
+      _pendingLocalChanges--;
+      if (mounted && _pendingLocalChanges == 0) {
+        _loadWeekData(_currentWeekOffset - 1000);
+      }
+    });
   }
 
   @override
@@ -149,49 +183,76 @@ class _RunningBlockGraphState extends State<RunningBlockGraph> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text('${startOfWeek.month}/${startOfWeek.day} - ${endOfWeek.month}/${endOfWeek.day}', style: TextStyle(color: isDark ? Colors.grey[700] : Colors.grey[400], fontSize: 12, fontWeight: FontWeight.w500)),
-                          Text('$_totalMiles mi', style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.bold)),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 180),
+                            transitionBuilder: (child, animation) => FadeTransition(
+                              opacity: animation,
+                              child: SlideTransition(
+                                position: Tween<Offset>(begin: const Offset(0, .2), end: Offset.zero).animate(animation),
+                                child: child,
+                              ),
+                            ),
+                            child: Text('$_totalMiles mi', key: ValueKey(_totalMiles), style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.bold)),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 24),
                       Expanded(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween, 
-                          crossAxisAlignment: CrossAxisAlignment.stretch, 
-                          children: List.generate(7, (dayIndex) {
-                            final miles = _weeklyBlocks[dayIndex] ?? 0;
-                            return Expanded(
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onVerticalDragStart: (_) => widget.onInteractionChanged?.call(true),
-                                onVerticalDragUpdate: (details) => _handleVerticalDrag(details, dayIndex, offset),
-                                onVerticalDragEnd: (_) { _dragAccumulator = 0; widget.onInteractionChanged?.call(false); },
-                                onVerticalDragCancel: () => widget.onInteractionChanged?.call(false),
-                                onTap: () => _handleVerticalDrag(DragUpdateDetails(globalPosition: Offset.zero, primaryDelta: -21), dayIndex, offset),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    Expanded(
-                                      child: Container(
-                                        alignment: Alignment.bottomCenter,
-                                        color: Colors.transparent, 
-                                        // NO ANIMATION for block counts per request
-                                        child: Column(
-                                          mainAxisAlignment: MainAxisAlignment.end,
-                                          children: List.generate(miles, (blockIndex) => Container(
-                                            width: 24, height: 8, margin: const EdgeInsets.only(top: 2), 
-                                            decoration: BoxDecoration(color: primaryColor, borderRadius: BorderRadius.circular(2))
-                                          )),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) => GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onVerticalDragStart: (details) => _startVerticalDrag(details, constraints.maxWidth),
+                            onVerticalDragUpdate: (details) => _updateVerticalDrag(details, offset),
+                            onVerticalDragEnd: (_) { _dragAccumulator = 0; widget.onInteractionChanged?.call(false); },
+                            onVerticalDragCancel: () { _dragAccumulator = 0; widget.onInteractionChanged?.call(false); },
+                            onTapUp: (details) => _queueBlockChange(runningDayIndexAt(details.localPosition.dx, constraints.maxWidth), offset, 1),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: List.generate(7, (dayIndex) {
+                                final miles = _weeklyBlocks[dayIndex] ?? 0;
+                                return Expanded(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      Expanded(
+                                        child: Container(
+                                          alignment: Alignment.bottomCenter,
+                                          color: Colors.transparent,
+                                          child: AnimatedSize(
+                                            duration: const Duration(milliseconds: 220),
+                                            curve: Curves.easeOutCubic,
+                                            alignment: Alignment.bottomCenter,
+                                            child: Column(
+                                              key: ValueKey('blocks-$miles'),
+                                              mainAxisSize: MainAxisSize.min,
+                                              mainAxisAlignment: MainAxisAlignment.end,
+                                              children: List.generate(miles, (blockIndex) => TweenAnimationBuilder<double>(
+                                                key: ValueKey('block-$blockIndex'),
+                                                tween: Tween(begin: 0, end: 1),
+                                                duration: const Duration(milliseconds: 220),
+                                                curve: Curves.easeOutBack,
+                                                builder: (context, value, child) => Opacity(
+                                                  opacity: value.clamp(0, 1),
+                                                  child: Transform.scale(scale: value.clamp(0, 1), alignment: Alignment.bottomCenter, child: child),
+                                                ),
+                                                child: Container(
+                                                  width: 24, height: 8, margin: const EdgeInsets.only(top: 2),
+                                                  decoration: BoxDecoration(color: primaryColor, borderRadius: BorderRadius.circular(2)),
+                                                ),
+                                              )),
+                                            ),
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Text(days[dayIndex], style: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400], fontSize: 9, fontWeight: FontWeight.bold)),
-                                    Text('${_weeklyBlocks[dayIndex] ?? 0}', style: TextStyle(color: isDark ? Colors.grey[800] : Colors.grey[300], fontSize: 10, fontWeight: FontWeight.bold)),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }),
+                                      const SizedBox(height: 12),
+                                      Text(days[dayIndex], style: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400], fontSize: 9, fontWeight: FontWeight.bold)),
+                                      Text('$miles', style: TextStyle(color: isDark ? Colors.grey[800] : Colors.grey[300], fontSize: 10, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                );
+                              }),
+                            ),
+                          ),
                         ),
                       ),
                     ],

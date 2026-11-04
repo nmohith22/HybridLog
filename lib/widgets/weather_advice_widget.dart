@@ -17,6 +17,8 @@ class _WeatherAdviceWidgetState extends State<WeatherAdviceWidget> {
   RunningWeather? _weather;
   String? _error;
   bool _loading = false;
+  bool _editingCity = true;
+  bool _hasSavedCity = false;
 
   @override
   void initState() {
@@ -34,17 +36,22 @@ class _WeatherAdviceWidgetState extends State<WeatherAdviceWidget> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final savedCity = prefs.getString(_cityPreferenceKey);
-      if (mounted && savedCity != null && _cityController.text.isEmpty) {
-        setState(() => _cityController.text = savedCity);
+      if (mounted && savedCity != null && savedCity.trim().isNotEmpty) {
+        setState(() {
+          _cityController.text = savedCity;
+          _editingCity = false;
+          _hasSavedCity = true;
+        });
+        await _loadWeather(cityOverride: savedCity);
       }
     } catch (_) {
       // Weather remains usable if a local preference cannot be read.
     }
   }
 
-  Future<void> _loadWeather() async {
+  Future<void> _loadWeather({String? cityOverride}) async {
     if (_loading) return;
-    final city = _cityController.text.trim();
+    final city = (cityOverride ?? _cityController.text).trim();
     if (city.length < 2 || city.length > 100) {
       setState(() => _error = 'Enter a city or town name (2–100 characters).');
       return;
@@ -54,11 +61,16 @@ class _WeatherAdviceWidgetState extends State<WeatherAdviceWidget> {
     setState(() {
       _loading = true;
       _error = null;
+      _weather = null;
     });
     try {
       final weather = await WeatherService.forCity(city);
       if (!mounted) return;
-      setState(() => _weather = weather);
+      setState(() {
+        _weather = weather;
+        _editingCity = false;
+        _hasSavedCity = true;
+      });
       try {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(_cityPreferenceKey, city);
@@ -69,7 +81,8 @@ class _WeatherAdviceWidgetState extends State<WeatherAdviceWidget> {
       if (mounted) setState(() => _error = error.message);
     } catch (_) {
       if (mounted) {
-        setState(() => _error = 'Weather could not be loaded. Please try again.');
+        setState(
+            () => _error = 'Weather could not be loaded. Please try again.');
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -108,7 +121,7 @@ class _WeatherAdviceWidgetState extends State<WeatherAdviceWidget> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'RUN CONDITIONS',
+                  weather?.location ?? 'RUN CONDITIONS',
                   style: TextStyle(
                     color: textColor,
                     fontWeight: FontWeight.bold,
@@ -116,6 +129,16 @@ class _WeatherAdviceWidgetState extends State<WeatherAdviceWidget> {
                   ),
                 ),
               ),
+              if (_hasSavedCity && !_editingCity)
+                IconButton(
+                  tooltip: 'Change city',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _loading
+                      ? null
+                      : () => setState(() => _editingCity = true),
+                  icon: Icon(Icons.edit_location_alt_outlined,
+                      color: subTextColor, size: 20),
+                ),
               if (_loading)
                 SizedBox.square(
                   dimension: 18,
@@ -127,52 +150,57 @@ class _WeatherAdviceWidgetState extends State<WeatherAdviceWidget> {
             ],
           ),
           const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _cityController,
-                  enabled: !_loading,
-                  textInputAction: TextInputAction.go,
-                  onSubmitted: (_) => _loadWeather(),
-                  onChanged: (_) {
-                    if (_error != null || _weather != null) {
-                      setState(() {
-                        _error = null;
-                        _weather = null;
-                      });
-                    }
-                  },
-                  decoration: const InputDecoration(
-                    labelText: 'City or town',
-                    hintText: 'Madison, WI',
-                    isDense: true,
-                    border: OutlineInputBorder(),
+          if (_editingCity) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _cityController,
+                    enabled: !_loading,
+                    textInputAction: TextInputAction.go,
+                    onSubmitted: (_) => _loadWeather(),
+                    onChanged: (_) {
+                      if (_error != null) setState(() => _error = null);
+                    },
+                    decoration: const InputDecoration(
+                      labelText: 'City or town',
+                      hintText: 'Madison, WI',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Padding(
-                padding: const EdgeInsets.only(top: 3),
-                child: FilledButton(
-                  onPressed: _loading ? null : _loadWeather,
-                  child: Text(_loading ? 'Loading' : 'Get weather'),
+                const SizedBox(width: 10),
+                Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: FilledButton(
+                    onPressed: _loading ? null : _loadWeather,
+                    child: Text(_loading ? 'Loading' : 'Get weather'),
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'When you request weather, your city and coordinates go to Open-Meteo. No device location is used.',
-            style: TextStyle(color: subTextColor, fontSize: 11),
-          ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'When you request weather, your city and coordinates go to Open-Meteo. No device location is used.',
+              style: TextStyle(color: subTextColor, fontSize: 11),
+            ),
+          ],
           if (_error != null) ...[
             const SizedBox(height: 10),
             Text(
               _error!,
               style: TextStyle(color: theme.colorScheme.error, fontSize: 13),
             ),
+            if (!_editingCity)
+              TextButton.icon(
+                onPressed: _loading
+                    ? null
+                    : () => _loadWeather(cityOverride: _cityController.text),
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Try again'),
+              ),
           ],
           if (weather != null) ...[
             const SizedBox(height: 16),
@@ -188,9 +216,6 @@ class _WeatherAdviceWidgetState extends State<WeatherAdviceWidget> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(weather.location,
-                          style: TextStyle(
-                              color: textColor, fontWeight: FontWeight.w600)),
                       Text(weather.conditions,
                           style: TextStyle(color: subTextColor, fontSize: 13)),
                     ],
@@ -210,9 +235,30 @@ class _WeatherAdviceWidgetState extends State<WeatherAdviceWidget> {
               spacing: 18,
               runSpacing: 8,
               children: [
-                _weatherDetail(Icons.thermostat, 'Feels ${weather.feelsLikeF.round()}°F', textColor, subTextColor),
-                _weatherDetail(Icons.air, '${weather.windMph.round()} mph wind', textColor, subTextColor),
-                _weatherDetail(Icons.water_drop_outlined, '${weather.precipitationIn.toStringAsFixed(2)} in precip.', textColor, subTextColor),
+                _weatherDetail(
+                    Icons.thermostat,
+                    'Feels ${weather.feelsLikeF.round()}°F',
+                    textColor,
+                    subTextColor),
+                _weatherDetail(Icons.air, '${weather.windMph.round()} mph wind',
+                    textColor, subTextColor),
+                _weatherDetail(
+                    Icons.water_drop_outlined,
+                    '${weather.precipitationIn.toStringAsFixed(2)} in precip.',
+                    textColor,
+                    subTextColor),
+                if (weather.sunrise != null)
+                  _weatherDetail(
+                      Icons.wb_twilight,
+                      'Sunrise ${DateFormat.jm().format(weather.sunrise!)}',
+                      textColor,
+                      subTextColor),
+                if (weather.sunset != null)
+                  _weatherDetail(
+                      Icons.nightlight_outlined,
+                      'Sunset ${DateFormat.jm().format(weather.sunset!)}',
+                      textColor,
+                      subTextColor),
               ],
             ),
             const SizedBox(height: 12),
@@ -248,7 +294,20 @@ class _WeatherAdviceWidgetState extends State<WeatherAdviceWidget> {
         0 || 1 => Icons.wb_sunny_outlined,
         2 || 3 => Icons.cloud_outlined,
         45 || 48 => Icons.cloud_outlined,
-        51 || 53 || 55 || 56 || 57 || 61 || 63 || 65 || 66 || 67 || 80 || 81 || 82 => Icons.grain,
+        51 ||
+        53 ||
+        55 ||
+        56 ||
+        57 ||
+        61 ||
+        63 ||
+        65 ||
+        66 ||
+        67 ||
+        80 ||
+        81 ||
+        82 =>
+          Icons.grain,
         71 || 73 || 75 || 77 || 85 || 86 => Icons.ac_unit,
         95 || 96 || 99 => Icons.thunderstorm,
         _ => Icons.cloud_outlined,

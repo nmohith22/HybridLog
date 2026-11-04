@@ -20,6 +20,7 @@ import '../widgets/steel_history_question_dialog.dart';
 import '../widgets/steel_weekly_recap_dialog.dart';
 import '../widgets/needle_workout_dialog.dart';
 import '../widgets/front_back_heatmap_fade.dart';
+import '../widgets/steel_prompt_dialog.dart';
 import '../services/tutorial_service.dart';
 import '../utils/weight_reps_format.dart';
 
@@ -733,10 +734,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         viewportHeight: viewportHeight,
         baseOffset: baseOffset,
         enabled: useScaling,
-        child: LegoPop(index: index, child: cardContent),
+        child: LegoPop(key: ValueKey('exercise-${ex.id}'), index: index, child: cardContent),
       );
     }
-    return LegoPop(index: index ?? 0, child: cardContent);
+    return LegoPop(key: ValueKey('exercise-${ex.id}'), index: index ?? 0, child: cardContent);
   }
 
   void _showFolderAssignmentDialog(Exercise ex) async {
@@ -1573,31 +1574,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Text('FAVORITES', style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.0)), 
             Row(children: [
-              PopupMenuButton<String>(
-                tooltip: 'Steel features',
-                icon: Icon(Icons.auto_awesome, color: accentRed, size: 24),
-                onSelected: (action) {
-                  switch (action) {
-                    case 'plan':
-                      _showAIGeneratorDialog();
-                      break;
-                    case 'log':
-                      _showSteelLogDraftDialog();
-                      break;
-                    case 'history':
-                      _showSteelHistoryDialog();
-                      break;
-                    case 'recap':
-                      _showWeeklyRecapDialog();
-                      break;
-                  }
-                },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(value: 'plan', child: Text('Plan a workout')),
-                  PopupMenuItem(value: 'log', child: Text('Log in plain language')),
-                  PopupMenuItem(value: 'history', child: Text('Ask my workout history')),
-                  PopupMenuItem(value: 'recap', child: Text('Weekly training recap')),
-                ],
+              SpringyButton(
+                onTap: _showAIGeneratorDialog,
+                child: Semantics(button: true, label: 'Ask Steel', child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Icon(Icons.auto_awesome, color: accentRed, size: 24),
+                )),
               ),
               IconButton(key: _createFolderKey, onPressed: _showCreateFolderDialog, icon: Icon(Icons.create_new_folder, color: isDark ? Colors.grey : Colors.black54, size: 24)),
             ])
@@ -1625,10 +1607,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     unselectedLabelColor: isDark ? Colors.grey[700] : Colors.grey[400],
                     dividerColor: Colors.transparent,
                     indicatorWeight: 3,
-                    labelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                     tabs: [
-                      Tab(key: _historyTabKey, icon: const Icon(Icons.calendar_month, size: 22), text: 'All Workouts'),
-                      const Tab(icon: Icon(Icons.fitness_center, size: 22), text: 'Exercises'),
+                      Tab(key: _historyTabKey, child: Semantics(label: 'All Workouts', child: const Icon(Icons.calendar_month, size: 28))),
+                      Tab(child: Semantics(label: 'Exercises', child: const Icon(Icons.fitness_center, size: 28))),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -1767,7 +1748,26 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  void _showAIGeneratorDialog() {
+  Future<void> _showAIGeneratorDialog() async {
+    final prompt = await SteelPromptDialog.show(context);
+    if (!mounted || prompt == null) return;
+    switch (prompt) {
+      case 'plan':
+        _showWorkoutPlannerDialog();
+        break;
+      case 'log':
+        await _showSteelLogDraftDialog();
+        break;
+      case 'history':
+        _showSteelHistoryDialog();
+        break;
+      case 'recap':
+        _showWeeklyRecapDialog();
+        break;
+    }
+  }
+
+  void _showWorkoutPlannerDialog() {
     showDialog<String>(
       context: context,
       builder: (_) => NeedleWorkoutDialog(
@@ -1839,6 +1839,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             final exercises = grouped[folder]!;
             return SliverToBoxAdapter(
               child: LegoPop(
+                key: ValueKey('favorite-folder-$folder'),
                 index: folderIndex++,
                 child: Theme(
                   data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -2261,7 +2262,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         final dayOfWeek = weekdays[workout.date.weekday];
                         final exCount = workout.exercises.length;
                         
-                        return Container(
+                        return LegoPop(
+                          key: ValueKey('history-${workout.id}'),
+                          index: index,
+                          child: Container(
                           margin: const EdgeInsets.only(bottom: 12),
                           child: SpringyButton(
                             onTap: () => _showWorkoutDetailsModal(workout),
@@ -2334,6 +2338,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                 ],
                               ),
                             ),
+                          ),
                           ),
                         );
                       },

@@ -11,6 +11,8 @@ class RunningWeather {
   final double windMph;
   final double precipitationIn;
   final int weatherCode;
+  final DateTime? sunrise;
+  final DateTime? sunset;
   final DateTime fetchedAt;
 
   const RunningWeather({
@@ -22,6 +24,8 @@ class RunningWeather {
     required this.windMph,
     required this.precipitationIn,
     required this.weatherCode,
+    required this.sunrise,
+    required this.sunset,
     required this.fetchedAt,
   });
 
@@ -48,8 +52,7 @@ class RunningWeather {
     if (weatherCode >= 95 && weatherCode <= 99) {
       return 'Thunderstorms nearby. Consider waiting for conditions to improve.';
     }
-    if (precipitationIn >= 0.04 ||
-        (weatherCode >= 51 && weatherCode <= 86)) {
+    if (precipitationIn >= 0.04 || (weatherCode >= 51 && weatherCode <= 86)) {
       return 'Wet conditions. Take care on slippery paths and roads.';
     }
     if (feelsLikeF >= 90) {
@@ -71,7 +74,8 @@ class WeatherService {
   static Future<RunningWeather> forCity(String input) async {
     final cityQuery = input.trim();
     if (cityQuery.length < 2 || cityQuery.length > 100) {
-      throw const FormatException('Enter a city or town name (2–100 characters).');
+      throw const FormatException(
+          'Enter a city or town name (2–100 characters).');
     }
 
     final geocoding = await _getJson(Uri.https(
@@ -87,8 +91,12 @@ class WeatherService {
     final place = Map<String, dynamic>.from(results.first as Map);
     final latitude = _number(place['latitude'], 'latitude');
     final longitude = _number(place['longitude'], 'longitude');
-    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
-      throw const FormatException('The selected location has invalid coordinates.');
+    if (latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180) {
+      throw const FormatException(
+          'The selected location has invalid coordinates.');
     }
 
     final forecast = await _getJson(Uri.https(
@@ -99,6 +107,7 @@ class WeatherService {
         'longitude': longitude.toString(),
         'current':
             'temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m',
+        'daily': 'sunrise,sunset',
         'temperature_unit': 'fahrenheit',
         'wind_speed_unit': 'mph',
         'precipitation_unit': 'inch',
@@ -106,19 +115,26 @@ class WeatherService {
       },
     ));
     final current = forecast['current'];
+    final daily = forecast['daily'];
     if (current is! Map) {
-      throw const FormatException('Weather conditions are unavailable right now.');
+      throw const FormatException(
+          'Weather conditions are unavailable right now.');
     }
+    final sunrise = _firstDateTime(daily, 'sunrise');
+    final sunset = _firstDateTime(daily, 'sunset');
 
     return RunningWeather(
       city: _string(place['name'], 'place name'),
       region: place['admin1'] is String ? place['admin1'] as String : null,
       country: place['country'] is String ? place['country'] as String : '',
       temperatureF: _number(current['temperature_2m'], 'temperature'),
-      feelsLikeF: _number(current['apparent_temperature'], 'feels-like temperature'),
+      feelsLikeF:
+          _number(current['apparent_temperature'], 'feels-like temperature'),
       windMph: _number(current['wind_speed_10m'], 'wind speed'),
       precipitationIn: _number(current['precipitation'], 'precipitation'),
       weatherCode: _integer(current['weather_code'], 'weather code'),
+      sunrise: sunrise,
+      sunset: sunset,
       fetchedAt: DateTime.now(),
     );
   }
@@ -133,10 +149,12 @@ class WeatherService {
         throw const FormatException(
             'Weather service is unavailable right now. Please try again.');
       }
-      final body = await response.transform(utf8.decoder).join().timeout(_timeout);
+      final body =
+          await response.transform(utf8.decoder).join().timeout(_timeout);
       final decoded = jsonDecode(body);
       if (decoded is! Map) {
-        throw const FormatException('Weather service returned an invalid response.');
+        throw const FormatException(
+            'Weather service returned an invalid response.');
       }
       return Map<String, dynamic>.from(decoded);
     } on TimeoutException {
@@ -165,5 +183,14 @@ class WeatherService {
   static String _string(Object? value, String field) {
     if (value is String && value.trim().isNotEmpty) return value.trim();
     throw FormatException('Weather data is missing $field.');
+  }
+
+  static DateTime? _firstDateTime(Object? daily, String field) {
+    if (daily is! Map) return null;
+    final values = daily[field];
+    if (values is! List || values.isEmpty || values.first is! String) {
+      return null;
+    }
+    return DateTime.tryParse(values.first as String);
   }
 }
