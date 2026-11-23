@@ -6,11 +6,9 @@ import '../services/database_service.dart';
 import '../models/fitness_schema.dart';
 import '../widgets/yearly_heatmap_calendar.dart';
 import '../widgets/running_block_graph.dart';
+import '../widgets/dashboard_header.dart';
 import '../widgets/lego_animations.dart';
-import '../services/data_backup_service.dart';
-import '../services/theme_service.dart';
 import '../widgets/theme_picker_widget.dart';
-import '../main.dart';
 import '../services/tutorial_service.dart';
 import '../widgets/weather_advice_widget.dart';
 
@@ -91,88 +89,11 @@ class _RunningScreenState extends State<RunningScreen> {
   }
 
 
-  void _showSettingsDialog() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardPurple = ThemeService().getResolvedTheme(context).card;
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: cardPurple,
-        title: Text('Settings', style: TextStyle(color: isDark ? Colors.white : Colors.black)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: Icon(isDark ? Icons.light_mode : Icons.dark_mode, color: Colors.grey),
-                title: Text(isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-                onTap: () {
-                  Navigator.pop(context);
-                  WorkoutApp.of(context)?.toggleTheme();
-                },
-              ),
-              const Divider(color: Colors.black12),
-              ListTile(
-                leading: const Icon(Icons.upload, color: Colors.grey),
-                title: Text('Export Data', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-                onTap: () async {
-                  Navigator.pop(context);
-                  final error = await DataBackupService.exportData();
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(backgroundColor: cardPurple, content: Text(error ?? 'Data exported successfully', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
-                    );
-                  }
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.download, color: Colors.grey),
-                title: Text('Import Data', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-                onTap: () async {
-                  Navigator.pop(context);
-                  final error = await DataBackupService.importData();
-                  if (error == null) {
-                    _calculateYearlyTotal();
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Data imported successfully')),
-                      );
-                    }
-                  } else {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(backgroundColor: Colors.red, content: Text('Import failed: $error', style: const TextStyle(color: Colors.white))),
-                      );
-                    }
-                  }
-                },
-              ),
-              const Divider(color: Colors.black12),
-
-              const Divider(color: Colors.black12),
-              ListTile(
-                leading: const Icon(Icons.school, color: Colors.grey),
-                title: Text('Replay Tutorial', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-                onTap: () async {
-                  Navigator.pop(context);
-                  await TutorialService.resetTutorial();
-                  _checkTutorial();
-                },
-              ),
-              const ThemePickerWidget(),
-
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close', style: TextStyle(color: Colors.grey)),
-          ),
-        ],
-      ),
-    );
-  }
+  void _showSettingsDialog() => showTrainingSettings(context,
+      onImported: _calculateYearlyTotal, onReplayTutorial: () async {
+        await TutorialService.resetTutorial();
+        if (mounted) await _checkTutorial();
+      });
 
   Future<void> _calculateYearlyTotal() async {
     final db = await DatabaseService().database;
@@ -242,9 +163,8 @@ class _RunningScreenState extends State<RunningScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final primaryColor = Theme.of(context).colorScheme.primary;
-
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     return Scaffold(
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           body: SafeArea(
@@ -254,48 +174,28 @@ class _RunningScreenState extends State<RunningScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          if (widget.onNavigateToWorkout != null)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8.0),
-                              child: SpringyButton(
-                                onTap: widget.onNavigateToWorkout,
-                                child: Container(key: _swipeNavKey, child: const Icon(Icons.chevron_right, color: Colors.grey, size: 28)),
-                              ),
-                            ),
-                          Text(
-                            'Running Log',
-                            style: TextStyle(color: isDark ? Colors.white : Colors.black, fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: -0.5),
-                          ),
-                          const SizedBox(width: 8),
-                          SpringyButton(onTap: _showSettingsDialog, child: Container(key: _settingsKey, child: Icon(Icons.settings, color: isDark ? Colors.grey : Colors.black54, size: 22))),
-                        ],
-                      ),
-                      GestureDetector(
-                        onTap: _showYearPicker,
-                        behavior: HitTestBehavior.opaque,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text('$_selectedYear TOTAL', style: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400], fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                                const Icon(Icons.keyboard_arrow_down, color: Colors.grey, size: 12),
-                              ],
-                            ),
-                            Text('$_yearlyTotal mi', style: TextStyle(color: primaryColor, fontSize: 24, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                    ],
+                  DashboardHeader(
+                    title: 'Running log',
+                    running: true,
+                    onNavigate: widget.onNavigateToWorkout,
+                    onSettings: _showSettingsDialog,
+                    navigationKey: _swipeNavKey,
+                    settingsKey: _settingsKey,
                   ),
-                  const SizedBox(height: 24),
-                  
+                  const SizedBox(height: 20),
+                  Material(
+                    color: colors.surface,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    clipBehavior: Clip.antiAlias,
+                    child: ListTile(
+                      onTap: _showYearPicker,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                      title: Text('Distance in $_selectedYear', style: theme.textTheme.labelLarge),
+                      subtitle: Text('$_yearlyTotal mi', style: theme.textTheme.headlineMedium),
+                      trailing: Icon(Icons.expand_more, color: colors.onSurfaceVariant),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   LegoPop(
                     index: 0,
                     child: Container(

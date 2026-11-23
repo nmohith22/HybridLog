@@ -5,11 +5,11 @@ import 'package:isar/isar.dart';
 import '../models/fitness_schema.dart';
 import '../services/database_service.dart';
 import '../services/exercise_seed.dart';
-import '../services/data_backup_service.dart';
 import '../services/widget_service.dart';
 import '../services/theme_service.dart';
 import '../widgets/theme_picker_widget.dart';
-import '../main.dart';
+import '../widgets/dashboard_header.dart';
+import 'package:intl/intl.dart';
 import '../widgets/lego_animations.dart';
 import 'exercise_history_screen.dart';
 import '../services/recovery_predictor.dart';
@@ -36,22 +36,19 @@ class _MarqueeTextState extends State<MarqueeText> {
   @override
   void initState() {
     super.initState();
-    _scrollController = ScrollController();
-    if (widget.text.length > 18) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _startScrolling());
-    }
+    _scrollController = ScrollController(onAttach: (position) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _startScrolling(position));
+    });
   }
 
-  void _startScrolling() async {
-    while (mounted && _scrollController.hasClients) {
-      await Future.delayed(const Duration(seconds: 1)); // Shorter delay
-      if (!mounted || !_scrollController.hasClients) return;
-      double maxExtent = _scrollController.position.maxScrollExtent;
-      double distance = maxExtent / 2;
-      // Faster duration (30ms per pixel instead of 40ms)
-      await _scrollController.animateTo(distance, duration: Duration(milliseconds: (distance * 30).toInt()), curve: Curves.linear);
-      if (!mounted || !_scrollController.hasClients) return;
-      _scrollController.jumpTo(0);
+  Future<void> _startScrolling(ScrollPosition position) async {
+    while (mounted && _scrollController.positions.contains(position)) {
+      await Future.delayed(const Duration(seconds: 1));
+      if (!mounted || !_scrollController.positions.contains(position)) return;
+      final distance = (position.maxScrollExtent + position.viewportDimension) / 2;
+      await position.animateTo(distance, duration: Duration(milliseconds: (distance * 30).round()), curve: Curves.linear);
+      if (!mounted || !_scrollController.positions.contains(position)) return;
+      position.jumpTo(0);
     }
   }
 
@@ -66,7 +63,21 @@ class _MarqueeTextState extends State<MarqueeText> {
         : widget.style;
 
     if (widget.text.length <= 18) return Text(widget.text, style: effectiveStyle, maxLines: 1, overflow: TextOverflow.ellipsis);
-    return IgnorePointer(child: SingleChildScrollView(controller: _scrollController, scrollDirection: Axis.horizontal, physics: const NeverScrollableScrollPhysics(), child: Row(children: [Text(widget.text, style: effectiveStyle, maxLines: 1), const SizedBox(width: 40), Text(widget.text, style: effectiveStyle, maxLines: 1), const SizedBox(width: 40)])));
+    return LayoutBuilder(builder: (context, bounds) {
+      final measure = TextPainter(
+        text: TextSpan(text: widget.text, style: DefaultTextStyle.of(context).style.merge(effectiveStyle)),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+        maxLines: 1,
+      )..layout();
+      final fits = measure.width <= bounds.maxWidth;
+      measure.dispose();
+      final label = Text(widget.text, style: effectiveStyle, maxLines: 1);
+      if (fits) return label;
+      return IgnorePointer(child: SingleChildScrollView(controller: _scrollController,
+        scrollDirection: Axis.horizontal, physics: const NeverScrollableScrollPhysics(),
+        child: Row(children: [label, const SizedBox(width: 40), ExcludeSemantics(child: label), const SizedBox(width: 40)])));
+    });
   }
 }
 
@@ -423,8 +434,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   Future<void> _openLoggingSheet(Exercise exercise, {DailyWorkout? editWorkout, int? editExIndex, DateTime? targetDate, ProgressionSuggestion? progression, List<SetLog>? draftSets}) async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? cardPurple : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black87;
+    final bgColor = cardPurple;
+    final textColor = Theme.of(context).colorScheme.onSurface;
 
     double defaultWeight = progression?.weight ?? 0.0;
     int defaultReps = progression?.reps ?? 10;
@@ -623,10 +634,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     final mainMuscles = ex.targetMuscles.isNotEmpty ? ex.targetMuscles : [ex.targetMuscle];
     final isFront = mainMuscles.isNotEmpty ? _isFrontMuscle(mainMuscles.first) : true;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = isDark ? cardPurple : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black87;
-    final secondaryTextColor = isDark ? Colors.grey[400] : Colors.grey[600];
-    final previewBg = isDark ? bgDarkPurple.withOpacity(0.5) : Colors.grey[100];
+    final colors = Theme.of(context).colorScheme;
+    final cardColor = colors.surface;
+    final textColor = colors.onSurface;
+    final secondaryTextColor = colors.onSurfaceVariant;
+    final previewBg = colors.surfaceContainerHighest;
 
     final cardContent = KeyedSubtree(
       key: index == 0 ? _exerciseCardKey : null,
@@ -635,8 +647,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         onLongPress: () => _showFolderAssignmentDialog(ex),
         child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        padding: const EdgeInsets.only(right: 16),
-        height: 100,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        constraints: const BoxConstraints(minHeight: 100),
         decoration: BoxDecoration(
           color: cardColor,
           borderRadius: BorderRadius.circular(20),
@@ -647,11 +659,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           children: [
             // Muscle Preview
             Container(
-              width: 100,
-              padding: const EdgeInsets.all(12),
+              width: 56,
+              height: 76,
+              padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 color: previewBg,
-                borderRadius: const BorderRadius.horizontal(left: Radius.circular(20)),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Stack(
                 alignment: Alignment.center,
@@ -675,7 +688,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             // Exercise Info
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -683,7 +696,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     FormattedExerciseName(
                       fullName: ex.name,
                       style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: -0.5),
-                      secondaryColor: secondaryTextColor ?? Colors.grey,
+                      secondaryColor: secondaryTextColor,
                     ),
                     const SizedBox(height: 4),
                     if (sets != null && sets.isNotEmpty)
@@ -706,6 +719,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             ),
             if (sets == null)
               IconButton(
+                tooltip: ex.isFavorite ? 'Remove from favorites' : 'Add to favorites',
                 icon: Icon(ex.isFavorite ? Icons.star : Icons.star_border, color: ex.isFavorite ? accentRed : (isDark ? Colors.grey[700] : Colors.grey[400])),
                 onPressed: () async {
                   final db = await DatabaseService().database;
@@ -748,8 +762,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              backgroundColor: isDark ? cardPurple : Colors.white,
-              title: Text('Assign to Folders', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
+              backgroundColor: cardPurple,
+              title: Text('Assign to Folders', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -797,7 +811,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           title: Text(
                             f.name,
                             style: TextStyle(
-                              color: isDark ? Colors.white : Colors.black87,
+                              color: Theme.of(context).colorScheme.onSurface,
                               fontSize: 14,
                               fontWeight: isAssigned ? FontWeight.bold : FontWeight.normal,
                             ),
@@ -822,7 +836,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           },
                         );
                       }),
-                      const Divider(color: Colors.black12),
+                      const Divider(),
                     ],
                     ListTile(
                       contentPadding: EdgeInsets.zero,
@@ -863,7 +877,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     TextField(
                       controller: newFolderController,
                       onChanged: (v) => setDialogState((){}),
-                      style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14),
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 14),
                       decoration: InputDecoration(
                         hintText: 'New Folder Name',
                         hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
@@ -920,22 +934,25 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   void _showCreateFolderDialog() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     TextEditingController folderController = TextEditingController();
-    showDialog(context: context, builder: (context) => AlertDialog(backgroundColor: isDark ? cardPurple : Colors.white, title: Text('Create New Folder', style: TextStyle(color: isDark ? Colors.white : Colors.black87)), content: TextField(controller: folderController, autofocus: true, style: TextStyle(color: isDark ? Colors.white : Colors.black87), decoration: InputDecoration(hintText: 'e.g., Push Day, Leg Day', hintStyle: const TextStyle(color: Colors.grey), enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: isDark ? Colors.grey : Colors.grey[300]!)))), actions: [
+    showDialog(context: context, builder: (context) => AlertDialog(backgroundColor: cardPurple, title: Text('Create New Folder', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)), content: TextField(controller: folderController, autofocus: true, style: TextStyle(color: Theme.of(context).colorScheme.onSurface), decoration: InputDecoration(hintText: 'e.g., Push Day, Leg Day', hintStyle: const TextStyle(color: Colors.grey), enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: isDark ? Colors.grey : Colors.grey[300]!)))), actions: [
       TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
-      TextButton(onPressed: () async { if (folderController.text.isNotEmpty) { final db = await DatabaseService().database; await db.writeTxn(() async { final f = WorkoutFolder()..name = folderController.text; await db.workoutFolders.put(f); }); Navigator.pop(context); _refreshData(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: isDark ? cardPurple : Colors.white, content: Text('Folder "${folderController.text}" created persistently!', style: TextStyle(color: isDark ? Colors.white : Colors.black)))); } }, child: const Text('Create', style: TextStyle(color: Colors.deepOrange))),
+      TextButton(onPressed: () async { if (folderController.text.isNotEmpty) { final db = await DatabaseService().database; await db.writeTxn(() async { final f = WorkoutFolder()..name = folderController.text; await db.workoutFolders.put(f); }); Navigator.pop(context); _refreshData(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: cardPurple, content: Text('Folder "${folderController.text}" created persistently!', style: TextStyle(color: isDark ? Colors.white : Colors.black)))); } }, child: const Text('Create', style: TextStyle(color: Colors.deepOrange))),
     ]));
   }
 
   Widget _buildAllExercisesTab(ScrollController controller) {
     final vh = MediaQuery.of(context).size.height;
     final so = _libraryScrollController.hasClients ? _libraryScrollController.offset : 0.0;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colors = Theme.of(context).colorScheme;
 
     return Column(children: [
       Padding(padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0), child: Row(children: [
-        Expanded(child: TextField(controller: _searchController, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14), onChanged: (v) { _searchQuery = v; _refreshData(); }, decoration: InputDecoration(hintText: "Search library...", hintStyle: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400]), prefixIcon: const Icon(Icons.search, color: Colors.grey, size: 20), filled: true, fillColor: isDark ? cardPurple : Colors.grey[100], contentPadding: const EdgeInsets.symmetric(vertical: 0), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)))),
+        Expanded(child: TextField(controller: _searchController, onChanged: (v) { _searchQuery = v; _refreshData(); },
+          decoration: InputDecoration(hintText: 'Find an exercise', prefixIcon: const Icon(Icons.search),
+            fillColor: colors.surfaceContainerHighest, border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)))),
         const SizedBox(width: 8),
         IconButton(
+          tooltip: 'Filter exercises',
           icon: Icon(
             Icons.filter_list, 
             color: (_selectedMuscles.isEmpty && _selectedManufacturer == null && _selectedSort == 'a-z') 
@@ -945,7 +962,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           onPressed: _showFilterDialog,
         ),
         const SizedBox(width: 4),
-        TextButton(onPressed: _showAddCustomExerciseDialog, child: Text("+ Add", style: TextStyle(color: accentRed, fontWeight: FontWeight.bold))),
+        IconButton(tooltip: 'Add exercise', onPressed: _showAddCustomExerciseDialog, icon: Icon(Icons.add, color: colors.primary)),
       ])),
       Expanded(child: FutureBuilder<List<Exercise>>(future: _exercisesFuture, builder: (context, snapshot) { 
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator()); 
@@ -969,8 +986,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
-          backgroundColor: isDark ? cardPurple : Colors.white,
-          title: Text('Add Custom Exercise', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
+          backgroundColor: cardPurple,
+          title: Text('Add Custom Exercise', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
           content: SizedBox(
             width: MediaQuery.of(context).size.width * 0.9,
             child: SingleChildScrollView(
@@ -980,7 +997,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 children: [
                   TextField(
                     controller: nameController,
-                    style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
                     decoration: InputDecoration(
                       hintText: "Exercise Name",
                       hintStyle: const TextStyle(color: Colors.grey),
@@ -992,7 +1009,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   const SizedBox(height: 8),
                   TextField(
                     controller: manufacturerController,
-                    style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
                     decoration: InputDecoration(
                       hintText: "e.g., Rogue, Life Fitness",
                       hintStyle: const TextStyle(color: Colors.grey),
@@ -1101,7 +1118,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               children: [
                                 SvgPicture.asset(
                                   'assets/body_front_base.svg',
-                                  colorFilter: ColorFilter.mode(isDark ? cardPurple : Colors.grey[300]!, BlendMode.srcIn),
+                                  colorFilter: ColorFilter.mode(Color.lerp(cardPurple, Theme.of(context).colorScheme.onSurface, .24)!, BlendMode.srcIn),
                                 ),
                                 ...selectedSecondaryMuscles.where((m) => _isFrontMuscle(m)).map((m) => SvgPicture.asset(
                                   'assets/front_$m.svg',
@@ -1255,7 +1272,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: isDark ? cardPurple : Colors.white,
+      backgroundColor: cardPurple,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) {
@@ -1279,7 +1296,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           Text(
                             "Filters & Sorting",
                             style: TextStyle(
-                              color: isDark ? Colors.white : Colors.black87,
+                              color: Theme.of(context).colorScheme.onSurface,
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
                               letterSpacing: -0.5,
@@ -1308,7 +1325,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       Text(
                         "SORT BY",
                         style: TextStyle(
-                          color: isDark ? Colors.grey[400] : Colors.grey[700],
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 1.0,
@@ -1367,7 +1384,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       Text(
                         "MANUFACTURER",
                         style: TextStyle(
-                          color: isDark ? Colors.grey[400] : Colors.grey[700],
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 1.0,
@@ -1405,7 +1422,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       Text(
                         "TARGET MUSCLE",
                         style: TextStyle(
-                          color: isDark ? Colors.grey[400] : Colors.grey[700],
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 1.0,
@@ -1458,127 +1475,54 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  void _showSettingsDialog() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: isDark ? cardPurple : Colors.white,
-        title: Text('Settings', style: TextStyle(color: isDark ? Colors.white : Colors.black)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: Icon(isDark ? Icons.light_mode : Icons.dark_mode, color: Colors.grey),
-                title: Text(isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-                onTap: () {
-                  Navigator.pop(context);
-                  WorkoutApp.of(context)?.toggleTheme();
-                },
-              ),
-              const Divider(color: Colors.black12),
-              ListTile(
-                leading: const Icon(Icons.upload, color: Colors.grey),
-                title: Text('Export Data', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-                onTap: () async {
-                  Navigator.pop(context);
-                  final error = await DataBackupService.exportData();
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(backgroundColor: isDark ? cardPurple : Colors.white, content: Text(error ?? 'Data exported successfully', style: TextStyle(color: isDark ? Colors.white : Colors.black))),
-                    );
-                  }
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.download, color: Colors.grey),
-                title: Text('Import Data', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-                onTap: () async {
-                  Navigator.pop(context);
-                  final error = await DataBackupService.importData();
-                  if (error == null) {
-                    _initializeData();
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Data imported successfully')),
-                      );
-                    }
-                  } else {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(backgroundColor: Colors.red, content: Text('Import failed: $error', style: const TextStyle(color: Colors.white))),
-                      );
-                    }
-                  }
-                },
-              ),
-              const Divider(color: Colors.black12),
-              const ThemePickerWidget(),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close', style: TextStyle(color: Colors.grey)),
-          ),
-        ],
-      ),
-    );
-  }
+  void _showSettingsDialog() => showTrainingSettings(context,
+      onImported: _initializeData);
 
   @override
   Widget build(BuildContext context) {
     final vh = MediaQuery.of(context).size.height;
     final so = _mainScrollController.hasClients ? _mainScrollController.offset : 0.0;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Stack(children: [
         CustomScrollView(controller: _mainScrollController, slivers: [
           SliverToBoxAdapter(child: SafeArea(child: Padding(padding: const EdgeInsets.all(16.0), child: Column(children: [
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              if (widget.onNavigateToRunning != null)
-                SpringyButton(
-                  onTap: widget.onNavigateToRunning,
-                  child: const Icon(Icons.chevron_left, color: Colors.grey, size: 28),
-                )
-              else
-                const SizedBox(width: 28), 
-              Text('Weekly Breakdown', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black, letterSpacing: -0.5)), 
-              SpringyButton(
-                onTap: _showSettingsDialog,
-                child: Semantics(
-                  button: true,
-                  label: 'Settings',
-                  child: Icon(Icons.settings, color: isDark ? Colors.grey : Colors.black54, size: 22),
-                ),
-              ),
-            ]),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween, 
-              children: [
-                _buildMasterModel(isFront: true),
-                _buildIntensityLegend(),
-                _buildMasterModel(isFront: false),
-              ]
+            DashboardHeader(title: 'Workouts', onSettings: _showSettingsDialog, onNavigate: widget.onNavigateToRunning),
+            const SizedBox(height: 20),
+            Container(
+              decoration: BoxDecoration(color: colors.surface, borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: colors.outlineVariant)),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Weekly breakdown', style: theme.textTheme.titleLarge),
+                const SizedBox(height: 12),
+                Row(children: [
+                  Expanded(child: _buildMasterModel(isFront: true)),
+                  _buildIntensityLegend(),
+                  Expanded(child: _buildMasterModel(isFront: false)),
+                ]),
+              ]),
             ),
           ])))),
-          SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text('FAVORITES', style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.0)), 
-            Row(children: [
-              SpringyButton(
-                onTap: _showAIGeneratorDialog,
-                child: Semantics(button: true, label: 'Ask Steel', child: Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Icon(Icons.auto_awesome, color: accentRed, size: 24),
+          SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 8, 8), child: Row(children: [
+            Expanded(child: Text('Favorites', style: theme.textTheme.titleLarge)),
+            SpringyButton(
+              onTap: _showAIGeneratorDialog,
+              child: Semantics(button: true, label: 'Ask Steel', excludeSemantics: true,
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(color: colors.surface, borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: colors.outlineVariant)),
+                  child: Row(children: [Icon(Icons.auto_awesome, color: colors.primary, size: 18),
+                    const SizedBox(width: 8), Text('Steel', style: theme.textTheme.labelLarge)]),
                 )),
-              ),
-              IconButton(key: _createFolderKey, onPressed: _showCreateFolderDialog, icon: Icon(Icons.create_new_folder, color: isDark ? Colors.grey : Colors.black54, size: 24)),
-            ])
+            ),
+            IconButton(key: _createFolderKey, tooltip: 'Create folder', onPressed: _showCreateFolderDialog,
+              icon: Icon(Icons.create_new_folder_outlined, color: colors.onSurfaceVariant)),
           ]))),
           _buildMainScreenFavorites(so, vh),
           const SliverToBoxAdapter(child: SizedBox(height: 150)),
@@ -1588,19 +1532,19 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           builder: (context, scrollController) {
             return Container(
               decoration: BoxDecoration(
-                color: isDark ? bgDarkPurple : Colors.white, 
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)), 
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.8 : 0.1), blurRadius: 30, offset: const Offset(0, -10))], 
-                border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05), width: 1)
+                color: theme.scaffoldBackgroundColor,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .14), blurRadius: 16, offset: const Offset(0, -3))],
+                border: Border.all(color: colors.outlineVariant),
               ),
               child: ListView(controller: scrollController, padding: EdgeInsets.zero, physics: const ClampingScrollPhysics(), children: [
-                GestureDetector(key: _appDrawerKey, onTap: () { if (_sheetSize < 0.5) _sheetController.animateTo(0.95, duration: const Duration(milliseconds: 300), curve: Curves.easeOut); else _sheetController.animateTo(0.05, duration: const Duration(milliseconds: 300), curve: Curves.easeIn); }, child: Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 8), color: Colors.transparent, child: Center(child: AnimatedRotation(duration: const Duration(milliseconds: 200), turns: _sheetSize > 0.5 ? 0.5 : 0.0, child: Icon(Icons.keyboard_arrow_up, color: isDark ? Colors.grey : Colors.black45, size: 24))))),
+                GestureDetector(key: _appDrawerKey, onTap: () { if (_sheetSize < 0.5) _sheetController.animateTo(0.95, duration: const Duration(milliseconds: 300), curve: Curves.easeOut); else _sheetController.animateTo(0.05, duration: const Duration(milliseconds: 300), curve: Curves.easeIn); }, child: Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 8), color: Colors.transparent, child: Center(child: AnimatedRotation(duration: const Duration(milliseconds: 200), turns: _sheetSize > 0.5 ? 0.5 : 0.0, child: Icon(Icons.keyboard_arrow_up, color: colors.onSurfaceVariant, size: 24))))),
                 if (_sheetSize > 0.15) ...[
                   TabBar(
                     controller: _tabController,
                     indicatorColor: accentRed,
                     labelColor: accentRed,
-                    unselectedLabelColor: isDark ? Colors.grey[700] : Colors.grey[400],
+                    unselectedLabelColor: colors.onSurfaceVariant,
                     dividerColor: Colors.transparent,
                     indicatorWeight: 3,
                     tabs: [
@@ -1626,7 +1570,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     
     return Column(
       children: [
-        Text("FATIGUED", style: TextStyle(fontSize: 7, fontWeight: FontWeight.bold, color: fatiguedColor, letterSpacing: 1.0)),
+        Text('Fatigued', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height: 8),
         Container(
           width: 8,
@@ -1645,13 +1589,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ),
         ),
         const SizedBox(height: 8),
-        Text("RECOVERY", style: TextStyle(fontSize: 7, fontWeight: FontWeight.bold, color: recoveryColor, letterSpacing: 1.0)),
+        Text('Recovered', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
       ],
     );
   }
 
   Widget _buildMasterModel({required bool isFront}) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     // Defines which muscles to show for each view
     final muscles = isFront 
       ? ['chest', 'abs', 'obliques', 'front_deltoids', 'side_deltoids', 'biceps', 'bicep_long_head', 'bicep_short_head', 'quads']
@@ -1670,7 +1613,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 // Base Body
                 SvgPicture.asset(
                   isFront ? 'assets/body_front_base.svg' : 'assets/body_back_base.svg',
-                  colorFilter: ColorFilter.mode(isDark ? cardPurple : Colors.grey[300]!, BlendMode.srcIn),
+                  colorFilter: ColorFilter.mode(Color.lerp(cardPurple, Theme.of(context).colorScheme.onSurface, .24)!, BlendMode.srcIn),
                 ),
                 // Muscle Layers
                 ...muscles.map((muscle) {
@@ -1689,8 +1632,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ),
           const SizedBox(height: 4),
           Text(
-            isFront ? "FRONT" : "BACK",
-            style: TextStyle(color: isDark ? Colors.grey[700] : Colors.grey[400], fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+            isFront ? 'Front' : 'Back',
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -1698,7 +1641,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   void _showRecoveryPredictorDialog() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     
     // Sort muscles by fatigue
     final sortedMuscles = _muscleIntensities.entries.toList()
@@ -1706,7 +1648,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       
     showModalBottomSheet(
       context: context,
-      backgroundColor: isDark ? cardPurple : Colors.white,
+      backgroundColor: cardPurple,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) {
         return Padding(
@@ -1715,9 +1657,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text("Recovery Predictor", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+              Text("Recovery Predictor", style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
               const SizedBox(height: 8),
-              Text("Estimated time until muscle groups are fully recovered.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[700], fontSize: 14)),
+              Text("Estimated time until muscle groups are fully recovered.", style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14)),
               const SizedBox(height: 24),
               if (sortedMuscles.isEmpty || sortedMuscles.every((m) => m.value < 0.1))
                 Center(child: Text("All muscles fully recovered!", style: TextStyle(color: accentRed, fontWeight: FontWeight.bold)))
@@ -1730,7 +1672,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(entry.key.replaceAll('_', ' ').toUpperCase(), style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 14)),
+                        Text(entry.key.replaceAll('_', ' ').toUpperCase(), style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.bold, fontSize: 14)),
                         Text(timeStr, style: TextStyle(color: days > 0 ? accentRed : Colors.green, fontWeight: FontWeight.bold, fontSize: 14)),
                       ],
                     ),
@@ -1781,7 +1723,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Widget _buildMainScreenFavorites(double scrollOffset, double viewportHeight) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colors = Theme.of(context).colorScheme;
     return FutureBuilder<Map<String, List<Exercise>>>(
       future: _favoritesFuture,
       builder: (context, snapshot) {
@@ -1793,11 +1735,23 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
         if (folders.isEmpty) {
           return SliverToBoxAdapter(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32.0),
-                child: Text("Star exercises in the library to see them here.", style: TextStyle(color: Colors.grey[700], fontSize: 14)),
-              ),
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: colors.surface, borderRadius: BorderRadius.circular(16)),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Long-press a library exercise to add it to a favorites folder.',
+                    style: TextStyle(color: colors.onSurfaceVariant)),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.fitness_center, size: 18),
+                  label: const Text('Browse exercises'),
+                  onPressed: () {
+                    _tabController.animateTo(1);
+                    _sheetController.animateTo(.95, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+                  },
+                ),
+              ]),
             ),
           );
         }
@@ -1810,18 +1764,23 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             return SliverToBoxAdapter(
               child: LegoPop(
                 index: folderIndex++,
-                child: Theme(
-                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   child: ExpansionTile(
                     initiallyExpanded: false,
-                    backgroundColor: isDark ? Colors.transparent : Colors.grey[50],
-                    leading: Icon(Icons.folder, color: accentRed.withOpacity(0.5), size: 20),
+                    backgroundColor: colors.surface,
+                    collapsedBackgroundColor: colors.surface,
+                    tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    leading: Icon(Icons.folder_outlined, color: colors.primary, size: 24),
                     title: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Expanded(child: Text(folder.toUpperCase(), style: TextStyle(color: accentRed, fontWeight: FontWeight.bold, letterSpacing: 1.2, fontSize: 13))),
+                        Expanded(child: Text(folder, style: TextStyle(color: colors.onSurface, fontWeight: FontWeight.w600, fontSize: 16))),
                         IconButton(
-                          icon: Icon(Icons.delete_outline, size: 18, color: Colors.grey),
+                          tooltip: 'Delete folder',
+                          icon: Icon(Icons.delete_outline, size: 18, color: colors.onSurfaceVariant),
                           onPressed: () => _deleteFolder(folder),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
@@ -1829,7 +1788,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       ],
                     ),
                     children: exercises.isEmpty 
-                      ? [Padding(padding: const EdgeInsets.all(16.0), child: Text("Empty Folder. Long-press an exercise to move it here.", style: TextStyle(color: Colors.grey[800], fontSize: 11, fontStyle: FontStyle.italic)))]
+                      ? [Padding(padding: const EdgeInsets.all(16.0), child: Text("Long-press an exercise in the library to add it here.", style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13)))]
                       : exercises.map((ex) => _buildExerciseCard(
                           ex, 
                           index: totalExerciseIndex++, 
@@ -1852,7 +1811,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E1E2C) : Colors.white,
+        backgroundColor: cardPurple,
         title: Text("Delete Folder?"),
         content: Text("Are you sure you want to delete '$folderName'? Exercises inside will not be deleted, but they will be removed from this folder."),
         actions: [
@@ -1910,11 +1869,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
     if (!mounted) return;
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: isDark ? cardPurple : Colors.white,
+      backgroundColor: cardPurple,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) {
         return Padding(
@@ -1925,7 +1883,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               Text(
                 "Select Year",
                 style: TextStyle(
-                  color: isDark ? Colors.white : Colors.black87,
+                  color: Theme.of(context).colorScheme.onSurface,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
@@ -1943,7 +1901,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         '$year',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: isSelected ? accentRed : (isDark ? Colors.white : Colors.black87),
+                          color: isSelected ? accentRed : (Theme.of(context).colorScheme.onSurface),
                           fontSize: 20,
                           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                         ),
@@ -1967,9 +1925,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   void _showWorkoutDetailsModal(DailyWorkout workout) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? cardPurple : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black87;
+    final bgColor = cardPurple;
+    final textColor = Theme.of(context).colorScheme.onSurface;
     final weekdays = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     final weekday = weekdays[workout.date.weekday];
     final dateStr = '${workout.date.month.toString().padLeft(2, '0')}/${workout.date.day.toString().padLeft(2, '0')}';
@@ -2154,7 +2111,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         height: 70,
         padding: const EdgeInsets.all(5),
         decoration: BoxDecoration(
-          color: isDark ? bgDarkPurple.withValues(alpha: 0.7) : const Color(0xFFF6F4F2),
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.05)),
         ),
@@ -2168,8 +2125,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   Widget _buildHistoryTab(ScrollController controller) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final weekdays = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     return FutureBuilder<List<DailyWorkout>>(
       future: _historyFuture,
       builder: (context, snapshot) {
@@ -2186,38 +2143,20 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                GestureDetector(
-                  onTap: _showHistoryYearPicker,
-                  behavior: HitTestBehavior.opaque,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 16.0, top: 12.0, bottom: 8.0),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '$_selectedHistoryYear',
-                          style: TextStyle(
-                            color: isDark ? Colors.white : Colors.black87,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        const Icon(Icons.keyboard_arrow_down, color: Colors.grey, size: 16),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(children: [
+                Expanded(child: Text('All workouts', style: theme.textTheme.titleLarge)),
+                TextButton.icon(onPressed: _showHistoryYearPicker, icon: const Icon(Icons.expand_more),
+                  label: Text('$_selectedHistoryYear')),
+              ]),
             ),
             Expanded(
               child: workouts.isEmpty
                   ? Center(
                       child: Text(
                         "No history for $_selectedHistoryYear.",
-                        style: TextStyle(color: isDark ? Colors.grey[700] : Colors.grey[400]),
+                        style: TextStyle(color: colors.onSurfaceVariant),
                       ),
                     )
                   : ListView.builder(
@@ -2227,82 +2166,26 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       itemCount: workouts.length,
                       itemBuilder: (context, index) {
                         final workout = workouts[index];
-                        final dateStr = '${workout.date.month.toString().padLeft(2, '0')}/${workout.date.day.toString().padLeft(2, '0')}';
-                        final dayOfWeek = weekdays[workout.date.weekday];
+                        final dateStr = DateFormat('EEEE, MMM d').format(workout.date);
                         final exCount = workout.exercises.length;
-                        
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),
                           child: SpringyButton(
                             onTap: () => _showWorkoutDetailsModal(workout),
                             child: Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: isDark ? cardPurple : Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: isDark 
-                                      ? Colors.white.withOpacity(0.02) 
-                                      : Colors.black.withOpacity(0.05),
-                                ),
-                                boxShadow: isDark
-                                    ? []
-                                    : [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.03),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 3),
-                                        ),
-                                      ],
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        dayOfWeek.toUpperCase(),
-                                        style: TextStyle(
-                                          color: accentRed,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                          letterSpacing: 1.0,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        dateStr,
-                                        style: TextStyle(
-                                          color: isDark ? Colors.white : Colors.black87,
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  Row(
-                                    children: [
-                                      Text(
-                                        '$exCount ${exCount == 1 ? "EXERCISE" : "EXERCISES"}',
-                                        style: TextStyle(
-                                          color: isDark ? Colors.grey[500] : Colors.grey[600],
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      _buildWorkoutMuscleIcon(workout, isDark),
-                                      const SizedBox(width: 4),
-                                      const Icon(
-                                        Icons.chevron_right,
-                                        color: Colors.grey,
-                                        size: 20,
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              decoration: BoxDecoration(color: colors.surface, borderRadius: BorderRadius.circular(18),
+                                border: Border.all(color: colors.outlineVariant)),
+                              child: Row(children: [
+                                _buildWorkoutMuscleIcon(workout, isDark),
+                                const SizedBox(width: 16),
+                                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                  Text(dateStr, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 4),
+                                  Text('$exCount ${exCount == 1 ? "exercise" : "exercises"}', style: TextStyle(color: colors.onSurfaceVariant)),
+                                ])),
+                                Icon(Icons.chevron_right_rounded, color: colors.onSurfaceVariant),
+                              ]),
                             ),
                           ),
                         );
@@ -2362,18 +2245,15 @@ class FormattedExerciseName extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 2.0),
             child: Text(
               manufacturer.toUpperCase(),
-              style: const TextStyle(
-                color: Color(0xFFC05545), // Muted red/terracotta accent color
+              style: TextStyle(
+                color: secondaryColor,
                 fontSize: 9,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 1.0,
               ),
             ),
           ),
-        MarqueeText(
-          text: name,
-          style: style,
-        ),
+        MarqueeText(text: name, style: style),
         if (detail != null)
           Padding(
             padding: const EdgeInsets.only(top: 2.0),

@@ -214,6 +214,7 @@ class _SteelChatDialogState extends State<SteelChatDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = _theme;
+    final colors = Theme.of(context).colorScheme;
     return Dialog(
       backgroundColor: theme.card,
       insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
@@ -227,20 +228,28 @@ class _SteelChatDialogState extends State<SteelChatDialog> {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
           child: Column(children: [
             Row(children: [
-              Icon(Icons.auto_awesome, color: theme.accent),
-              const SizedBox(width: 10),
+              CircleAvatar(
+                  backgroundColor: colors.surfaceContainerHighest,
+                  child:
+                      Icon(Icons.auto_awesome, size: 21, color: theme.accent)),
+              const SizedBox(width: 12),
               Expanded(
-                  child: Text('Steel',
-                      style: TextStyle(
-                          color: theme.text,
-                          fontSize: 19,
-                          fontWeight: FontWeight.bold))),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text('Steel',
+                        style: Theme.of(context).textTheme.titleLarge),
+                    Text('On-device training assistant',
+                        style: TextStyle(
+                            color: colors.onSurfaceVariant, fontSize: 12)),
+                  ])),
               IconButton(
                 tooltip: 'Close',
                 onPressed: _working ? null : () => Navigator.pop(context),
                 icon: Icon(Icons.close, color: theme.subText),
               ),
             ]),
+            const Divider(height: 16),
             Expanded(
               child: ListView.builder(
                 controller: _scroll,
@@ -270,49 +279,45 @@ class _SteelChatDialogState extends State<SteelChatDialog> {
                           ]),
                     );
                   }
-                  return _messageBubble(_messages[index], theme);
+                  final bubble = _messageBubble(_messages[index], theme);
+                  if (index != 0) return bubble;
+                  return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        bubble,
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: List.generate(
+                                _suggestions.length,
+                                (i) => ActionChip(
+                                      avatar: Icon(
+                                          const [
+                                            Icons.fitness_center,
+                                            Icons.edit_note,
+                                            Icons.manage_search,
+                                            Icons.insights
+                                          ][i],
+                                          color: colors.primary,
+                                          size: 18),
+                                      label: Text(_suggestions[i].$1),
+                                      onPressed: _working
+                                          ? null
+                                          : () => _selectSuggestion(i),
+                                      backgroundColor: colors.surface,
+                                      side: BorderSide(
+                                          color: colors.outlineVariant),
+                                    )),
+                          ),
+                        ),
+                      ]);
                 },
               ),
             ),
-            ...[
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text('SUGGESTED PROMPTS',
-                    style: TextStyle(
-                        color: theme.subText,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1)),
-              ),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 6,
-                runSpacing: 2,
-                children: List.generate(
-                    _suggestions.length,
-                    (index) => ActionChip(
-                          label: Text(_suggestions[index].$1,
-                              style:
-                                  TextStyle(color: theme.text, fontSize: 11)),
-                          avatar: Icon(
-                              [
-                                Icons.fitness_center,
-                                Icons.edit_note,
-                                Icons.manage_search,
-                                Icons.insights
-                              ][index],
-                              size: 16,
-                              color: theme.accent),
-                          backgroundColor: theme.background,
-                          onPressed:
-                              _working ? null : () => _selectSuggestion(index),
-                          side: BorderSide(
-                              color: theme.accent.withValues(alpha: .22)),
-                        )),
-              ),
-              const SizedBox(height: 8),
-            ],
-            Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            const Divider(height: 12),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Expanded(
                 child: TextField(
                   controller: _input,
@@ -330,9 +335,12 @@ class _SteelChatDialogState extends State<SteelChatDialog> {
                   style: TextStyle(color: theme.text),
                   decoration: InputDecoration(
                     hintText: 'Ask Steel anything…',
-                    hintStyle: TextStyle(color: theme.subText),
+                    hintStyle: TextStyle(color: colors.onSurfaceVariant),
+                    helperText: _memoryLabel,
+                    helperStyle:
+                        TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
                     filled: true,
-                    fillColor: theme.background,
+                    fillColor: colors.surfaceContainerHighest,
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 12),
                     border: OutlineInputBorder(
@@ -350,20 +358,10 @@ class _SteelChatDialogState extends State<SteelChatDialog> {
                     : () => _send(),
                 style: IconButton.styleFrom(
                     backgroundColor: theme.accent,
-                    foregroundColor: theme.background),
+                    foregroundColor: colors.onPrimary),
                 icon: const Icon(Icons.send_rounded),
               ),
             ]),
-            Padding(
-              padding: const EdgeInsets.only(top: 5),
-              child: Row(children: [
-                Expanded(
-                    child: Text(_memoryLabel,
-                        style: TextStyle(color: theme.subText, fontSize: 10))),
-                Text('Your workout data stays on this device.',
-                    style: TextStyle(color: theme.subText, fontSize: 10)),
-              ]),
-            ),
           ]),
         ),
       ),
@@ -393,8 +391,8 @@ class _SteelChatDialogState extends State<SteelChatDialog> {
           Text(message.text,
               style: TextStyle(
                   color: message.isError ? theme.accent : theme.text,
-                  fontSize: 13,
-                  height: 1.35)),
+                  fontSize: 15,
+                  height: 1.4)),
           if (reply?.draft case final draft?) ...[
             const SizedBox(height: 10),
             _detailCard(theme, Icons.edit_note, 'Workout draft', [
@@ -420,7 +418,7 @@ class _SteelChatDialogState extends State<SteelChatDialog> {
                 onPressed: _working ? null : () => _approve(message),
                 style: FilledButton.styleFrom(
                     backgroundColor: theme.accent,
-                    foregroundColor: theme.background),
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary),
                 icon: const Icon(Icons.check, size: 17),
                 label: Text(action.operation == 'delete'
                     ? 'Review deletion'
@@ -439,7 +437,9 @@ class _SteelChatDialogState extends State<SteelChatDialog> {
           if (reply != null && reply.sources.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text('From your app data: ${reply.sources.take(4).join(' · ')}',
-                style: TextStyle(color: theme.subText, fontSize: 10)),
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 12)),
           ],
         ]),
       ),

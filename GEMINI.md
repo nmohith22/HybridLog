@@ -17,7 +17,7 @@ A senior-engineered, high-performance fitness tracking application built with Fl
 
 ## GitHub & Deployment
 - **Repository:** [https://github.com/nmohith22/HybridLog.git](https://github.com/nmohith22/HybridLog.git)
-- **Tests and releases:** Follow the test gate in [AGENTS.md](AGENTS.md) before building a release APK or pushing. The release workflow publishes versioned APKs from `release/`.
+- **Tests and releases:** Run the full Flutter suite with the pinned Needle runtime and the pytest/Ragas evaluations before building a release APK or pushing. The release workflow publishes versioned APKs from `release/`.
 
 ## Resumption Instructions
 - **Checkpoint-First:** When asked to "resume from the most recent chat" or "pick up where we left off," always check the **Checkpoint: May 3, 2026** section below. 

@@ -94,7 +94,7 @@ class _WeatherAdviceWidgetState extends State<WeatherAdviceWidget> {
     final theme = Theme.of(context);
     final weather = _weather;
     final textColor = theme.colorScheme.onSurface;
-    final subTextColor = theme.colorScheme.onSurface.withOpacity(0.7);
+    final subTextColor = theme.colorScheme.onSurfaceVariant;
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -121,12 +121,8 @@ class _WeatherAdviceWidgetState extends State<WeatherAdviceWidget> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  weather?.location ?? 'RUN CONDITIONS',
-                  style: TextStyle(
-                    color: textColor,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.1,
-                  ),
+                  weather?.location ?? 'Run conditions',
+                  style: theme.textTheme.titleLarge,
                 ),
               ),
               if (_hasSavedCity && !_editingCity)
@@ -183,8 +179,8 @@ class _WeatherAdviceWidgetState extends State<WeatherAdviceWidget> {
             ),
             const SizedBox(height: 8),
             Text(
-              'When you request weather, your city and coordinates go to Open-Meteo. No device location is used.',
-              style: TextStyle(color: subTextColor, fontSize: 11),
+              'Weather uses the city you enter. Its coordinates are shared with Open-Meteo.',
+              style: TextStyle(color: subTextColor, fontSize: 12),
             ),
           ],
           if (_error != null) ...[
@@ -262,11 +258,12 @@ class _WeatherAdviceWidgetState extends State<WeatherAdviceWidget> {
               ],
             ),
             const SizedBox(height: 12),
-            Text(weather.runningAdvice,
-                style: TextStyle(
-                    color: textColor,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500)),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(12)),
+              child: Text(weather.runningAdvice, style: TextStyle(color: textColor, fontSize: 14, height: 1.4)),
+            ),
             const SizedBox(height: 6),
             Text(
               'Updated ${DateFormat.jm().format(weather.fetchedAt)} · Weather by Open-Meteo · Location data by GeoNames',

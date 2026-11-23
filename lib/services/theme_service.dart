@@ -248,6 +248,10 @@ class ThemeService extends ChangeNotifier {
 
   String get currentThemeId => _currentThemeId;
 
+  String get nextQuickThemeId => switch (_currentThemeId) {
+    'system' => 'light', 'light' => 'dark', _ => 'system',
+  };
+
   AppTheme get activeTheme {
     return themes.firstWhere((t) => t.id == _currentThemeId, orElse: () => themes[0]);
   }
@@ -305,31 +309,38 @@ class ThemeService extends ChangeNotifier {
 
   ThemeData getThemeDataFor(String themeId) {
     final theme = themes.firstWhere((t) => t.id == themeId, orElse: () => themes[0]);
-    final isDark = theme.isDark;
-
+    final base = theme.isDark ? const ColorScheme.dark() : const ColorScheme.light();
+    final scheme = base.copyWith(
+      primary: theme.accent,
+      onPrimary: theme.accent.computeLuminance() > .179 ? Colors.black : Colors.white,
+      secondary: theme.subText,
+      surface: theme.card,
+      onSurface: theme.text,
+      onSurfaceVariant: Color.lerp(theme.card, theme.text, .77),
+      outlineVariant: Color.lerp(theme.card, theme.text, .18),
+      surfaceContainerHighest: Color.lerp(theme.card, theme.text, .07),
+    );
+    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(20));
     return ThemeData(
-      brightness: isDark ? Brightness.dark : Brightness.light,
+      brightness: scheme.brightness,
       primaryColor: theme.accent,
       scaffoldBackgroundColor: theme.background,
       cardColor: theme.card,
-      colorScheme: isDark
-          ? ColorScheme.dark(
-              primary: theme.accent,
-              secondary: theme.subText,
-              surface: theme.card,
-              onSurface: theme.text,
-              surfaceContainerHighest: theme.card.withOpacity(0.8),
-            )
-          : ColorScheme.light(
-              primary: theme.accent,
-              secondary: theme.subText,
-              surface: theme.card,
-              onSurface: theme.text,
-              surfaceContainerHighest: theme.card.withOpacity(0.8),
-            ),
+      colorScheme: scheme,
       useMaterial3: true,
-      dialogBackgroundColor: theme.card,
-      dividerColor: theme.subText.withOpacity(0.2),
+      textTheme: TextTheme(
+        headlineMedium: TextStyle(color: theme.text, fontSize: 32, height: 1.12, fontWeight: FontWeight.w700, letterSpacing: -1.1),
+        titleLarge: TextStyle(color: theme.text, fontSize: 21, fontWeight: FontWeight.w600, letterSpacing: -.5),
+        labelLarge: TextStyle(color: theme.text, fontSize: 14, fontWeight: FontWeight.w600),
+      ),
+      dialogTheme: DialogThemeData(backgroundColor: theme.card, surfaceTintColor: Colors.transparent, shape: shape),
+      bottomSheetTheme: BottomSheetThemeData(backgroundColor: theme.card, surfaceTintColor: Colors.transparent),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: scheme.surfaceContainerHighest,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+      dividerColor: scheme.outlineVariant,
     );
   }
 }

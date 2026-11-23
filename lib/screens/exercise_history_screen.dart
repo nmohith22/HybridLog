@@ -64,14 +64,12 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _history.isEmpty
               ? Center(child: Text("No history yet.", style: TextStyle(color: theme.subText)))
-              : Column(
-                  children: [
-                    _buildChart(theme),
-                    _buildMetrics(theme),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount:
-                            _history.length + (progressionSuggestion == null ? 0 : 1),
+              : CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(child: _buildChart(theme)),
+                    SliverToBoxAdapter(child: _buildMetrics(theme)),
+                    SliverList.builder(
+                        itemCount: _history.length + (progressionSuggestion == null ? 0 : 1),
                         itemBuilder: (context, index) {
                           if (progressionSuggestion != null && index == 0) {
                             return _buildProgressionCard(
@@ -133,7 +131,6 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
                             ),
                           );
                         },
-                      ),
                     ),
                   ],
                 ),
@@ -188,7 +185,7 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
     if (_history.length < 2) {
       return Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Text("Not enough data for chart.", style: TextStyle(color: theme.subText)),
+        child: Text('Log two sessions to see your trend.', style: TextStyle(color: theme.subText)),
       );
     }
 
@@ -358,22 +355,20 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
       if (workoutReps > maxRepsInWorkout) maxRepsInWorkout = workoutReps;
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      child: GridView.count(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisCount: 2,
-        childAspectRatio: 2.5,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        children: [
-          _metricCard('Total Workouts', totalWorkouts.toString(), theme),
-          _metricCard('Max Weight', '${maxWeightEver.toInt()} lbs', theme),
-          _metricCard('Max Reps/Session', maxRepsInWorkout.toString(), theme),
-          _metricCard('Est. 1RM', '${estimated1RM.toInt()} lbs', theme),
-        ],
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: LayoutBuilder(builder: (context, bounds) {
+        final columns = bounds.maxWidth >= 640 ? 4 : 2;
+        final width = (bounds.maxWidth - (columns - 1) * 8) / columns;
+        return Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final stat in [
+            ('Workouts', totalWorkouts.toString()),
+            ('Max weight', '${maxWeightEver.toInt()} lbs'),
+            ('Max reps / session', maxRepsInWorkout.toString()),
+            ('Estimated 1RM', '${estimated1RM.toInt()} lbs'),
+          ]) SizedBox(width: width, child: _metricCard(stat.$1, stat.$2, theme)),
+        ]);
+      }),
     );
   }
 
@@ -389,9 +384,9 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: TextStyle(color: theme.subText, fontSize: 12, fontWeight: FontWeight.bold)),
+          Text(value, style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 4),
-          Text(value, style: TextStyle(color: theme.text, fontSize: 18, fontWeight: FontWeight.w800)),
+          Text(title, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
         ],
       ),
     );

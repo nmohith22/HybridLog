@@ -72,8 +72,6 @@ class _YearlyHeatmapCalendarState extends State<YearlyHeatmapCalendar> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark ? Colors.white : Colors.black87;
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Column(
@@ -89,15 +87,12 @@ class _YearlyHeatmapCalendarState extends State<YearlyHeatmapCalendar> {
                 label: Text(_currentView == CalendarView.month ? 'Back to Year' : 'Back to Month', style: TextStyle(color: primaryColor)),
               )
             else
-              Text('Yearly Overview', style: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.bold)),
+              Text('Running archive', style: Theme.of(context).textTheme.titleLarge),
           ],
         ),
         const SizedBox(height: 16),
-        // We use a fixed height container here to ensure the nested lists render correctly
-        SizedBox(
-          height: 350,
-          child: AnimatedSwitcher(duration: const Duration(milliseconds: 300), child: _buildCurrentView()),
-        ),
+        AnimatedSwitcher(duration: const Duration(milliseconds: 300), child: _currentView == CalendarView.year
+            ? _buildCurrentView() : SizedBox(key: ValueKey(_currentView), height: 350, child: _buildCurrentView())),
       ],
     );
   }
@@ -118,9 +113,12 @@ class _YearlyHeatmapCalendarState extends State<YearlyHeatmapCalendar> {
 
     return GridView.builder(
       key: const ValueKey('year_view'),
+      shrinkWrap: true,
+      padding: EdgeInsets.zero,
       physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.5),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3, crossAxisSpacing: 8, mainAxisSpacing: 8,
+        mainAxisExtent: 32 + MediaQuery.textScalerOf(context).scale(18)),
       itemCount: 12,
       itemBuilder: (context, index) {
         return LegoPop(
@@ -177,7 +175,7 @@ class _YearlyHeatmapCalendarState extends State<YearlyHeatmapCalendar> {
 
   Widget _buildWeekView() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark ? Colors.white : Colors.black87;
+    final textColor = Theme.of(context).colorScheme.onSurface;
     final primaryColor = Theme.of(context).colorScheme.primary;
     final days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 

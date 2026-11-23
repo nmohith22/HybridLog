@@ -88,14 +88,7 @@ class _WorkoutAppState extends State<WorkoutApp> with WidgetsBindingObserver {
 
   void toggleTheme() {
     final service = ThemeService();
-    final current = service.currentThemeId;
-    if (current == 'system') {
-      service.setTheme('light');
-    } else if (current == 'light') {
-      service.setTheme('dark');
-    } else {
-      service.setTheme('system');
-    }
+    service.setTheme(service.nextQuickThemeId);
   }
 
   bool get isDarkMode => ThemeService().getResolvedTheme(context).isDark;

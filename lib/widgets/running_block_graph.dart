@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../services/database_service.dart';
 import '../services/widget_service.dart';
 import 'lego_animations.dart';
@@ -163,7 +164,7 @@ class _RunningBlockGraphState extends State<RunningBlockGraph> {
             int offset = pageIndex - 1000;
             final startOfWeek = _getStartOfWeek(offset);
             final endOfWeek = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day + 6);
-            final days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+            final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
             
             return AnimatedBuilder(
               animation: _pageController,
@@ -182,7 +183,14 @@ class _RunningBlockGraphState extends State<RunningBlockGraph> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('${startOfWeek.month}/${startOfWeek.day} - ${endOfWeek.month}/${endOfWeek.day}', style: TextStyle(color: isDark ? Colors.grey[700] : Colors.grey[400], fontSize: 12, fontWeight: FontWeight.w500)),
+                          Expanded(child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Weekly mileage', style: Theme.of(context).textTheme.titleMedium),
+                              Text('${DateFormat.MMMd().format(startOfWeek)} – ${DateFormat.MMMd().format(endOfWeek)}',
+                                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
+                            ],
+                          )),
                           Text('$_totalMiles mi', style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.bold)),
                         ],
                       ),
@@ -206,21 +214,26 @@ class _RunningBlockGraphState extends State<RunningBlockGraph> {
                                   mainAxisAlignment: MainAxisAlignment.end,
                                   children: [
                                     Expanded(
-                                      child: Container(
-                                        alignment: Alignment.bottomCenter,
-                                        color: Colors.transparent,
-                                        child: Column(
-                                          mainAxisAlignment: MainAxisAlignment.end,
-                                          children: List.generate(miles, (_) => Container(
-                                            width: 24, height: 8, margin: const EdgeInsets.only(top: 2),
-                                            decoration: BoxDecoration(color: primaryColor, borderRadius: BorderRadius.circular(2)),
-                                          )),
-                                        ),
-                                      ),
+                                      child: LayoutBuilder(builder: (context, constraints) {
+                                        final step = (constraints.maxHeight / 20).clamp(0.0, 10.0).toDouble();
+                                        return Align(
+                                          alignment: Alignment.bottomCenter,
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: List.generate(20, (i) => Container(
+                                              width: 24, height: step * .8, margin: EdgeInsets.only(top: step * .2),
+                                              decoration: BoxDecoration(
+                                                color: i >= 20 - miles ? primaryColor : textColor.withValues(alpha: .055),
+                                                borderRadius: BorderRadius.circular(2),
+                                              ),
+                                            )),
+                                          ),
+                                        );
+                                      }),
                                     ),
                                     const SizedBox(height: 12),
-                                    Text(days[dayIndex], style: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400], fontSize: 9, fontWeight: FontWeight.bold)),
-                                    Text('$miles', key: ValueKey('run-day-count-$offset-$dayIndex'), style: TextStyle(color: isDark ? Colors.grey[800] : Colors.grey[300], fontSize: 10, fontWeight: FontWeight.bold)),
+                                    Text(days[dayIndex], style: TextStyle(color: textColor, fontSize: 11, fontWeight: FontWeight.w600)),
+                                    Text('$miles', key: ValueKey('run-day-count-$offset-$dayIndex'), style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12, fontFeatures: const [FontFeature.tabularFigures()])),
                                   ],
                                 ),
                               ),

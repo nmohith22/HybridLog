@@ -33,6 +33,22 @@ void main() {
     expect(find.text('Log a workout'), findsOneWidget);
   });
 
+  testWidgets('the composer and exchange count fit above a phone keyboard',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.viewInsets = const FakeViewPadding(bottom: 290);
+    addTearDown(tester.view.reset);
+    await tester
+        .pumpWidget(MaterialApp(home: SteelChatDialog(onDataChanged: () {})));
+    await tester.enterText(find.byType(TextField), 'Show my last run');
+    await tester.pump();
+    expect(find.byTooltip('Send').hitTestable(), findsOneWidget);
+    expect(tester.getBottomLeft(find.text('0/10 exchanges in memory')).dy,
+        lessThan(350));
+    expect(tester.takeException(), isNull);
+  });
+
   test('local retrieval puts matching workout records first', () {
     final squat = SteelLocalDocument(
       kind: 'workout',
