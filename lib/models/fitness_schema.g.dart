@@ -3455,13 +3455,33 @@ const SubSetLogSchema = Schema(
   name: r'SubSetLog',
   id: -8387819610331959312,
   properties: {
-    r'reps': PropertySchema(
+    r'exerciseName': PropertySchema(
       id: 0,
+      name: r'exerciseName',
+      type: IsarType.string,
+    ),
+    r'pauseSeconds': PropertySchema(
+      id: 1,
+      name: r'pauseSeconds',
+      type: IsarType.long,
+    ),
+    r'reps': PropertySchema(
+      id: 2,
       name: r'reps',
       type: IsarType.long,
     ),
+    r'secondaryMuscles': PropertySchema(
+      id: 3,
+      name: r'secondaryMuscles',
+      type: IsarType.stringList,
+    ),
+    r'targetMuscles': PropertySchema(
+      id: 4,
+      name: r'targetMuscles',
+      type: IsarType.stringList,
+    ),
     r'weight': PropertySchema(
-      id: 1,
+      id: 5,
       name: r'weight',
       type: IsarType.double,
     )
@@ -3478,6 +3498,26 @@ int _subSetLogEstimateSize(
   Map<Type, List<int>> allOffsets,
 ) {
   var bytesCount = offsets.last;
+  {
+    final value = object.exerciseName;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  bytesCount += 3 + object.secondaryMuscles.length * 3;
+  {
+    for (var i = 0; i < object.secondaryMuscles.length; i++) {
+      final value = object.secondaryMuscles[i];
+      bytesCount += value.length * 3;
+    }
+  }
+  bytesCount += 3 + object.targetMuscles.length * 3;
+  {
+    for (var i = 0; i < object.targetMuscles.length; i++) {
+      final value = object.targetMuscles[i];
+      bytesCount += value.length * 3;
+    }
+  }
   return bytesCount;
 }
 
@@ -3487,8 +3527,12 @@ void _subSetLogSerialize(
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  writer.writeLong(offsets[0], object.reps);
-  writer.writeDouble(offsets[1], object.weight);
+  writer.writeString(offsets[0], object.exerciseName);
+  writer.writeLong(offsets[1], object.pauseSeconds);
+  writer.writeLong(offsets[2], object.reps);
+  writer.writeStringList(offsets[3], object.secondaryMuscles);
+  writer.writeStringList(offsets[4], object.targetMuscles);
+  writer.writeDouble(offsets[5], object.weight);
 }
 
 SubSetLog _subSetLogDeserialize(
@@ -3498,8 +3542,12 @@ SubSetLog _subSetLogDeserialize(
   Map<Type, List<int>> allOffsets,
 ) {
   final object = SubSetLog();
-  object.reps = reader.readLong(offsets[0]);
-  object.weight = reader.readDouble(offsets[1]);
+  object.exerciseName = reader.readStringOrNull(offsets[0]);
+  object.pauseSeconds = reader.readLongOrNull(offsets[1]);
+  object.reps = reader.readLong(offsets[2]);
+  object.secondaryMuscles = reader.readStringList(offsets[3]) ?? [];
+  object.targetMuscles = reader.readStringList(offsets[4]) ?? [];
+  object.weight = reader.readDouble(offsets[5]);
   return object;
 }
 
@@ -3511,8 +3559,16 @@ P _subSetLogDeserializeProp<P>(
 ) {
   switch (propertyId) {
     case 0:
-      return (reader.readLong(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 1:
+      return (reader.readLongOrNull(offset)) as P;
+    case 2:
+      return (reader.readLong(offset)) as P;
+    case 3:
+      return (reader.readStringList(offset) ?? []) as P;
+    case 4:
+      return (reader.readStringList(offset) ?? []) as P;
+    case 5:
       return (reader.readDouble(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -3521,6 +3577,232 @@ P _subSetLogDeserializeProp<P>(
 
 extension SubSetLogQueryFilter
     on QueryBuilder<SubSetLog, SubSetLog, QFilterCondition> {
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      exerciseNameIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'exerciseName',
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      exerciseNameIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'exerciseName',
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition> exerciseNameEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'exerciseName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      exerciseNameGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'exerciseName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      exerciseNameLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'exerciseName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition> exerciseNameBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'exerciseName',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      exerciseNameStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'exerciseName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      exerciseNameEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'exerciseName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      exerciseNameContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'exerciseName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition> exerciseNameMatches(
+      String pattern,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'exerciseName',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      exerciseNameIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'exerciseName',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      exerciseNameIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'exerciseName',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      pauseSecondsIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'pauseSeconds',
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      pauseSecondsIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'pauseSeconds',
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition> pauseSecondsEqualTo(
+      int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'pauseSeconds',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      pauseSecondsGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'pauseSeconds',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      pauseSecondsLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'pauseSeconds',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition> pauseSecondsBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'pauseSeconds',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
   QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition> repsEqualTo(
       int value) {
     return QueryBuilder.apply(this, (query) {
@@ -3571,6 +3853,458 @@ extension SubSetLogQueryFilter
         upper: upper,
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      secondaryMusclesElementEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'secondaryMuscles',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      secondaryMusclesElementGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'secondaryMuscles',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      secondaryMusclesElementLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'secondaryMuscles',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      secondaryMusclesElementBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'secondaryMuscles',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      secondaryMusclesElementStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'secondaryMuscles',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      secondaryMusclesElementEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'secondaryMuscles',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      secondaryMusclesElementContains(String value,
+          {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'secondaryMuscles',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      secondaryMusclesElementMatches(String pattern,
+          {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'secondaryMuscles',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      secondaryMusclesElementIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'secondaryMuscles',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      secondaryMusclesElementIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'secondaryMuscles',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      secondaryMusclesLengthEqualTo(int length) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'secondaryMuscles',
+        length,
+        true,
+        length,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      secondaryMusclesIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'secondaryMuscles',
+        0,
+        true,
+        0,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      secondaryMusclesIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'secondaryMuscles',
+        0,
+        false,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      secondaryMusclesLengthLessThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'secondaryMuscles',
+        0,
+        true,
+        length,
+        include,
+      );
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      secondaryMusclesLengthGreaterThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'secondaryMuscles',
+        length,
+        include,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      secondaryMusclesLengthBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'secondaryMuscles',
+        lower,
+        includeLower,
+        upper,
+        includeUpper,
+      );
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      targetMusclesElementEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'targetMuscles',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      targetMusclesElementGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'targetMuscles',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      targetMusclesElementLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'targetMuscles',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      targetMusclesElementBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'targetMuscles',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      targetMusclesElementStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'targetMuscles',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      targetMusclesElementEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'targetMuscles',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      targetMusclesElementContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'targetMuscles',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      targetMusclesElementMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'targetMuscles',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      targetMusclesElementIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'targetMuscles',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      targetMusclesElementIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'targetMuscles',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      targetMusclesLengthEqualTo(int length) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'targetMuscles',
+        length,
+        true,
+        length,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      targetMusclesIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'targetMuscles',
+        0,
+        true,
+        0,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      targetMusclesIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'targetMuscles',
+        0,
+        false,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      targetMusclesLengthLessThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'targetMuscles',
+        0,
+        true,
+        length,
+        include,
+      );
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      targetMusclesLengthGreaterThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'targetMuscles',
+        length,
+        include,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<SubSetLog, SubSetLog, QAfterFilterCondition>
+      targetMusclesLengthBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'targetMuscles',
+        lower,
+        includeLower,
+        upper,
+        includeUpper,
+      );
     });
   }
 

@@ -319,7 +319,7 @@ class SteelChatService {
     final workouts = await db.dailyWorkouts.where().sortByDateDesc().findAll();
     final runs = await db.runningLogs.where().sortByDateDesc().findAll();
     final names = workouts
-        .expand((w) => w.exercises)
+        .expand((w) => w.trainingExercises)
         .map((ex) => ex.exerciseName)
         .whereType<String>()
         .toSet();
@@ -437,7 +437,7 @@ class SteelChatService {
             .where((workout) =>
                 inPeriod(workout.date) &&
                 (selectedNames.isEmpty ||
-                    workout.exercises
+                    workout.trainingExercises
                         .any((ex) => selectedNames.contains(ex.exerciseName))))
             .toList();
     final running = includeRuns
@@ -457,7 +457,7 @@ class SteelChatService {
     }
 
     Iterable<LoggedExercise> exercises(DailyWorkout w) =>
-        w.exercises.where((ex) =>
+        w.trainingExercises.where((ex) =>
             selectedNames.isEmpty || selectedNames.contains(ex.exerciseName));
     if (selectedNames.length == 1 &&
         RegExp(r'\b(next time|next session|aim for)\b').hasMatch(words)) {
@@ -510,9 +510,11 @@ class SteelChatService {
         final sessions = singleSession ? strength.take(1).toList() : strength;
         final sets =
             sessions.expand(exercises).expand((ex) => ex.sets).toList();
-        final reps = sets.fold<int>(0, (total, set) => total + set.reps);
+        final steps = sets.expand((set) => set.subSets).where((step) => step.reps > 0);
+        final count = sets.length + steps.length;
+        final reps = sets.fold<int>(0, (total, set) => total + set.reps) + steps.fold<int>(0, (total, step) => total + step.reps);
         final volume =
-            '${sets.length} ${sets.length == 1 ? 'set' : 'sets'} and $reps ${reps == 1 ? 'rep' : 'reps'}';
+            '$count ${count == 1 ? 'set' : 'sets'} and $reps ${reps == 1 ? 'rep' : 'reps'}';
         summaries.add(singleSession && sessions.isNotEmpty
             ? 'On ${_date(sessions.first.date)}, you logged $volume$focus.'
             : 'You logged ${sessions.length} ${sessions.length == 1 ? 'workout' : 'workouts'}$focus$scope, with $volume.');
@@ -536,7 +538,7 @@ class SteelChatService {
               '${_date(workout.date)} · ${exercises(workout).map((ex) => ex.exerciseName).join(', ')}',
           details: exercises(workout)
               .map((ex) =>
-                  '${ex.exerciseName}: ${ex.sets.map((set) => formatWeightReps(set.weight, set.reps)).join(', ')}')
+                  '${ex.exerciseName}: ${ex.sets.expand((set) => [formatWeightReps(set.weight, set.reps), ...set.sequence.map(formatSetStep)]).join(', ')}')
               .join('\n')
         ),
       for (final run in running)
@@ -609,6 +611,10 @@ class SteelChatService {
                         .map((subSet) => {
                               'weight': subSet.weight,
                               'reps': subSet.reps,
+                              'pause_seconds': subSet.pauseSeconds,
+                              'exercise_name': subSet.exerciseName,
+                              'target_muscles': subSet.targetMuscles,
+                              'secondary_muscles': subSet.secondaryMuscles,
                             })
                         .toList(),
                   })

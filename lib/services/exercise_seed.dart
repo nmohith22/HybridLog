@@ -78,6 +78,7 @@ final List<Map<String, dynamic>> initialExercises = [
   {"name": "Pull-ups", "primary": "lats", "secondary": ["biceps", "back_deltoids", "upper_back", "forearm"]},
   {"name": "Chin-ups", "primary": "biceps", "secondary": ["lats", "back_deltoids", "forearm"]},
   {"name": "Weighted Pull-ups", "primary": "lats", "secondary": ["biceps", "back_deltoids", "upper_back", "forearm"]},
+  {"name": "Bar Muscle-up", "primary": "lats", "secondary": ["triceps", "chest", "front_deltoids", "forearm"]},
 
   // ==========================================
   // --- BICEPS ---

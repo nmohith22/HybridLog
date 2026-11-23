@@ -19,6 +19,8 @@ import '../widgets/front_back_heatmap_fade.dart';
 import '../widgets/steel_chat_dialog.dart';
 import '../services/tutorial_service.dart';
 import '../utils/weight_reps_format.dart';
+import '../services/muscle_fatigue_service.dart';
+import '../widgets/set_sequence_editor.dart';
 
 // --- HELPER: MARQUEE TEXT ---
 class MarqueeText extends StatefulWidget {
@@ -134,6 +136,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   final TextEditingController _searchController = TextEditingController();
   
   Map<String, double> _muscleIntensities = {}; 
+  Map<DateTime, Map<String, double>> _recentMuscleWork = {};
   String _searchQuery = "";
   List<String> _selectedMuscles = [];
   String? _selectedManufacturer;
@@ -293,126 +296,23 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     });
   }
 
-  // Sub-muscle to parent roll-up mapping. Volume from sub-muscles
-  // is added to the parent so the body SVG heatmap lights up correctly.
-  static const _subMuscleParent = {
-    'bicep_short_head': 'biceps',
-    'bicep_long_head': 'biceps',
-    'tricep_long_head': 'triceps',
-    'forearm': 'biceps', // forearm work generally accompanies bicep loading
-    'upper_back': 'traps',
-    'adductors': 'glutes',
-  };
-
-  // Fatigue thresholds in **volume-load units** (weight × reps summed over
-  // the 7-day window). These represent the weekly volume-load at which a
-  // muscle group reaches 100 % fatigue on the heatmap.
-  //
-  // Calibration notes (real-world sanity checks):
-  //   • Large muscles (chest/quads/lats) — 4 exercises × 3 sets × 10 reps × 135 lb ≈ 16 200 lb·reps
-  //   • Medium muscles (biceps/delts)   — 3 exercises × 3 sets × 12 reps × 40 lb  ≈  4 320 lb·reps
-  //   • Small / isolation muscles       — 2 exercises × 3 sets × 15 reps × 25 lb  ≈  2 250 lb·reps
-  //   • Bodyweight fallback weight used when weight == 0 is 25 lb.
-  static const _fatigueThresholds = {
-    // Large compound groups
-    'chest': 14000.0, 'quads': 16000.0, 'lats': 14000.0,
-    'lower_back': 12000.0, 'hamstrings': 10000.0,
-    // Medium groups
-    'biceps': 4000.0, 'triceps': 5000.0,
-    'front_deltoids': 5000.0, 'side_deltoids': 3500.0, 'back_deltoids': 3000.0,
-    'glutes': 10000.0, 'traps': 5000.0,
-    // Small / isolation groups
-    'abs': 3000.0, 'obliques': 2500.0, 'calves': 4000.0,
-    'bicep_short_head': 2000.0, 'bicep_long_head': 2000.0,
-    'tricep_long_head': 2500.0, 'forearm': 2000.0,
-    'adductors': 3000.0, 'upper_back': 4000.0,
-  };
-
-  // Bodyweight stand-in when weight is logged as 0 (bodyweight exercises).
-  static const double _bodyweightFallback = 25.0;
-
   Future<void> _loadRecentMuscles() async {
     final db = await DatabaseService().database;
     final now = DateTime.now();
-    final sevenDaysAgo = now.subtract(const Duration(days: 7));
-    final recentWorkouts = await db.dailyWorkouts.filter().dateGreaterThan(sevenDaysAgo).findAll();
-
-    Map<String, double> muscleVolumes = {};
-
-    void addVolume(String muscle, double amount) {
-      muscleVolumes[muscle] = (muscleVolumes[muscle] ?? 0) + amount;
-      // Roll up to parent group so the body SVG parent layer also lights up.
-      final parent = _subMuscleParent[muscle];
-      if (parent != null) {
-        muscleVolumes[parent] = (muscleVolumes[parent] ?? 0) + amount;
+    final workouts = await db.dailyWorkouts.filter()
+        .dateBetween(now.subtract(MuscleFatigueService.window), now).findAll();
+    final sessions = <DateTime, Map<String, double>>{};
+    for (final workout in workouts) {
+      final day = sessions.putIfAbsent(workout.date, () => {});
+      for (final entry in MuscleFatigueService.workoutLoad(workout).entries) {
+        day.update(entry.key, (value) => value + entry.value, ifAbsent: () => entry.value);
       }
     }
-
-    for (var workout in recentWorkouts) {
-      // Time-decay: sessions today count at 100%, sessions 7 days ago at ~30%.
-      final daysAgo = now.difference(workout.date).inHours / 24.0;
-      final decayFactor = (1.0 - (daysAgo / 10.0)).clamp(0.3, 1.0);
-
-      for (var log in workout.exercises) {
-        // Compute volume-load per set: weight × reps.
-        // For bodyweight exercises (weight == 0), use a fallback value.
-        double exerciseVolumeLoad = 0.0;
-        int totalSets = log.sets.length;
-        for (var s in log.sets) {
-          final effectiveWeight = s.weight > 0 ? s.weight : _bodyweightFallback;
-          exerciseVolumeLoad += effectiveWeight * s.reps;
-          for (var sub in s.subSets) {
-            final effectiveSubWeight = sub.weight > 0 ? sub.weight : _bodyweightFallback;
-            exerciseVolumeLoad += effectiveSubWeight * sub.reps;
-          }
-        }
-
-        // High-rep endurance bonus: sets above 20 reps per set are
-        // disproportionately fatiguing. Apply a 1.15× multiplier.
-        if (totalSets > 0) {
-          int sumReps = 0;
-          for (var s in log.sets) {
-            sumReps += s.reps;
-            for (var sub in s.subSets) sumReps += sub.reps;
-          }
-          final avgRepsPerSet = sumReps / totalSets;
-          if (avgRepsPerSet > 20) {
-            exerciseVolumeLoad *= 1.15;
-          }
-        }
-
-        // Multi-set fatigue bonus: more sets = more cumulative fatigue.
-        // 1–2 sets = 1.0×, 3 sets = 1.05×, 4 sets = 1.10×, 5+ = 1.15×.
-        if (totalSets >= 5) exerciseVolumeLoad *= 1.15;
-        else if (totalSets >= 4) exerciseVolumeLoad *= 1.10;
-        else if (totalSets >= 3) exerciseVolumeLoad *= 1.05;
-
-        // Apply time decay.
-        exerciseVolumeLoad *= decayFactor;
-
-        // Distribute to primary muscles (full credit).
-        final mains = log.targetMuscles.isNotEmpty
-            ? log.targetMuscles
-            : (log.targetMuscle != null ? [log.targetMuscle!] : <String>[]);
-        for (var main in mains) {
-          addVolume(main, exerciseVolumeLoad);
-        }
-        // Secondary muscles receive 40% of the volume-load.
-        for (var sec in log.secondaryMuscles) {
-          addVolume(sec, exerciseVolumeLoad * 0.4);
-        }
-      }
-    }
-
-    // Convert raw volume-load to 0.0–1.0 intensity via per-muscle thresholds.
-    const defaultThreshold = 3000.0;
-    Map<String, double> intensities = {};
-    muscleVolumes.forEach((muscle, volume) {
-      final threshold = _fatigueThresholds[muscle] ?? defaultThreshold;
-      intensities[muscle] = (volume / threshold).clamp(0.0, 1.0);
+    if (mounted) setState(() {
+      _recentMuscleWork = sessions;
+      _muscleIntensities = MuscleFatigueService.recentLoad(sessions, now)
+          .map((muscle, load) => MapEntry(muscle, load.clamp(0.0, 1.0)));
     });
-
-    if (mounted) setState(() => _muscleIntensities = intensities);
   }
 
   Color _getIntensityColor(double intensity) {
@@ -448,12 +348,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         final db = await DatabaseService().database;
         final lastWorkout = await db.dailyWorkouts
             .filter()
-            .exercisesElement((q) => q.exerciseNameEqualTo(exercise.name))
+            .exercisesElement((q) => q.exerciseNameEqualTo(exercise.name).or()
+                .setsElement((set) => set.subSetsElement(
+                    (step) => step.exerciseNameEqualTo(exercise.name))))
             .sortByDateDesc()
             .findFirst();
         if (lastWorkout != null) {
-          final loggedExs = lastWorkout.exercises.where((e) => e.exerciseName == exercise.name);
-          final sets = loggedExs.expand((e) => e.sets).toList();
+          final loggedExs = lastWorkout.trainingExercises.where((e) => e.exerciseName == exercise.name);
+          final sets = loggedExs.expand((e) => e.sets).where((set) => set.reps > 0).toList();
           if (sets.isNotEmpty) {
             defaultWeight = sets.map((s) => s.weight).reduce((curr, next) => curr < next ? curr : next);
             defaultReps = sets.last.reps;
@@ -467,11 +369,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     List<SetLog> currentSets;
     if (editWorkout != null && editExIndex != null) {
       final existingEx = editWorkout.exercises[editExIndex];
-      currentSets = existingEx.sets.map((s) => SetLog()..reps = s.reps..weight = s.weight..subSets = s.subSets.map((sub) => SubSetLog()..reps = sub.reps..weight = sub.weight).toList()..restPauseSeconds = s.restPauseSeconds).toList();
+      currentSets = existingEx.sets.map((set) => set.editableCopy()).toList();
     } else if (draftSets != null) {
-      currentSets = draftSets.map((set) => SetLog()..reps = set.reps..weight = set.weight).toList();
+      currentSets = draftSets.map((set) => set.editableCopy()).toList();
     } else { currentSets = [SetLog()..reps = defaultReps..weight = defaultWeight]; }
 
+    if (!mounted) return;
+    var logDate = targetDate;
     final mainMuscles = exercise.targetMuscles.isNotEmpty ? exercise.targetMuscles : [exercise.targetMuscle];
     final weightHint = defaultWeight % 1 == 0 ? defaultWeight.toInt().toString() : defaultWeight.toString();
     final repsHint = defaultReps.toString();
@@ -482,8 +386,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       builder: (context) {
         return StatefulBuilder(builder: (context, setModalState) {
           return Padding(
-            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 24, right: 24, top: 24),
-            child: Column(
+            padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              child: Column(
               mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -494,9 +400,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       const Text('STEEL DRAFT · REVIEW SETS BEFORE SAVING', style: TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.7)),
                   ])),
                   Column(children: [
-                    IconButton(iconSize: 28, onPressed: () async {
-                      final picked = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime.now());
-                      if (picked != null) { Navigator.pop(context); _openLoggingSheet(exercise, targetDate: picked); }
+                    if (editWorkout == null) IconButton(tooltip: logDate == null ? 'Log date' : DateFormat.yMMMd().format(logDate!), iconSize: 28, onPressed: () async {
+                      final picked = await showDatePicker(context: context, initialDate: logDate ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime.now());
+                      if (picked != null && context.mounted) setModalState(() => logDate = picked);
                     }, icon: const Icon(Icons.calendar_today, color: Colors.grey)),
                     IconButton(iconSize: 28, onPressed: () {
                       Navigator.pop(context);
@@ -509,7 +415,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ]),
                 const SizedBox(height: 16),
                 ...List.generate(currentSets.length, (index) => Dismissible(
-                  key: ValueKey('set_${index}_${currentSets.length}'),
+                  key: ObjectKey(currentSets[index]),
                   direction: DismissDirection.startToEnd,
                   onDismissed: (_) => setModalState(() => currentSets.removeAt(index)),
                   background: Container(alignment: Alignment.centerLeft, padding: const EdgeInsets.only(left: 20), color: Colors.red.withOpacity(0.2), child: const Icon(Icons.delete, color: Colors.red)),
@@ -522,47 +428,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8.0), child: TextFormField(initialValue: currentSets[index].weight == defaultWeight && editWorkout == null && progression == null && draftSets == null ? '' : (currentSets[index].weight % 1 == 0 ? currentSets[index].weight.toInt().toString() : currentSets[index].weight.toString()), keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'(^\d*\.?\d*)'))], style: TextStyle(color: textColor, fontWeight: FontWeight.bold), decoration: InputDecoration(filled: true, fillColor: isDark ? bgDarkPurple : Colors.grey[100], hintText: weightHint, hintStyle: const TextStyle(color: Colors.grey), suffixText: 'lbs', suffixStyle: const TextStyle(color: Colors.grey, fontSize: 14), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)), onChanged: (v) => currentSets[index].weight = double.tryParse(v) ?? 0.0))),
                           Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8.0), child: TextFormField(initialValue: currentSets[index].reps == defaultReps && editWorkout == null && progression == null && draftSets == null ? '' : currentSets[index].reps.toString(), keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], style: TextStyle(color: textColor, fontWeight: FontWeight.bold), decoration: InputDecoration(filled: true, fillColor: isDark ? bgDarkPurple : Colors.grey[100], hintText: repsHint, hintStyle: const TextStyle(color: Colors.grey), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)), onChanged: (v) => currentSets[index].reps = int.tryParse(v) ?? 0))),
                         ]),
-                        // SubSets (Dropsets/Supersets)
-                        ...List.generate(currentSets[index].subSets.length, (subIndex) => Padding(
-                          padding: const EdgeInsets.only(top: 8.0, left: 32.0),
-                          child: Row(children: [
-                            Expanded(flex: 1, child: Text('Drop', style: TextStyle(color: accentRed, fontSize: 14, fontWeight: FontWeight.bold))),
-                            Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8.0), child: TextFormField(initialValue: currentSets[index].subSets[subIndex].weight == 0 ? '' : (currentSets[index].subSets[subIndex].weight % 1 == 0 ? currentSets[index].subSets[subIndex].weight.toInt().toString() : currentSets[index].subSets[subIndex].weight.toString()), keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'(^\d*\.?\d*)'))], style: TextStyle(color: textColor, fontWeight: FontWeight.bold), decoration: InputDecoration(filled: true, fillColor: isDark ? bgDarkPurple : Colors.grey[100], hintText: '0', hintStyle: const TextStyle(color: Colors.grey), suffixText: 'lbs', suffixStyle: const TextStyle(color: Colors.grey, fontSize: 14), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)), onChanged: (v) => currentSets[index].subSets[subIndex].weight = double.tryParse(v) ?? 0.0))),
-                            Expanded(flex: 2, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8.0), child: TextFormField(initialValue: currentSets[index].subSets[subIndex].reps == 0 ? '' : currentSets[index].subSets[subIndex].reps.toString(), keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], style: TextStyle(color: textColor, fontWeight: FontWeight.bold), decoration: InputDecoration(filled: true, fillColor: isDark ? bgDarkPurple : Colors.grey[100], hintText: '0', hintStyle: const TextStyle(color: Colors.grey), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)), onChanged: (v) => currentSets[index].subSets[subIndex].reps = int.tryParse(v) ?? 0))),
-                            IconButton(icon: const Icon(Icons.close, color: Colors.grey, size: 18), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () => setModalState(() => currentSets[index].subSets.removeAt(subIndex))),
-                          ]),
-                        )),
-                        // Rest Pause
-                        if (currentSets[index].restPauseSeconds != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8.0, left: 32.0),
-                            child: Row(children: [
-                              Expanded(flex: 1, child: Text('Pause', style: TextStyle(color: Colors.orange, fontSize: 14, fontWeight: FontWeight.bold))),
-                              Expanded(flex: 4, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8.0), child: TextFormField(initialValue: currentSets[index].restPauseSeconds.toString(), keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], style: TextStyle(color: textColor, fontWeight: FontWeight.bold), decoration: InputDecoration(filled: true, fillColor: isDark ? bgDarkPurple : Colors.grey[100], hintText: 'Sec', suffixText: 's', suffixStyle: const TextStyle(color: Colors.grey, fontSize: 14), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)), onChanged: (v) { final val = int.tryParse(v) ?? 0; currentSets[index].restPauseSeconds = val > 60 ? 60 : val; }))),
-                              IconButton(icon: const Icon(Icons.close, color: Colors.grey, size: 18), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () => setModalState(() => currentSets[index].restPauseSeconds = null)),
-                            ]),
-                          ),
-                        // Actions
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8.0, left: 32.0),
-                          child: Row(
-                            children: [
-                              TextButton.icon(
-                                style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                                onPressed: () => setModalState(() => currentSets[index].subSets.add(SubSetLog()..reps = 0..weight = 0.0)),
-                                icon: const Icon(Icons.arrow_drop_down, color: Colors.grey, size: 16),
-                                label: const Text('Add Dropset', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                              ),
-                              const SizedBox(width: 16),
-                              if (currentSets[index].restPauseSeconds == null)
-                                TextButton.icon(
-                                  style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                                  onPressed: () => setModalState(() => currentSets[index].restPauseSeconds = 15),
-                                  icon: const Icon(Icons.timer, color: Colors.grey, size: 16),
-                                  label: const Text('Rest Pause', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                                ),
-                            ]
-                          ),
+                        SetSequenceEditor(
+                          set: currentSets[index],
+                          onChanged: () => setModalState(() {}),
+                          chooseExercise: () => _pickSupersetExercise(context, exercise.name),
                         ),
                       ],
                     ),
@@ -577,7 +446,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   Expanded(flex: 2, child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: accentRed, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: () async {
                     final db = await DatabaseService().database;
                     if (editWorkout != null && editExIndex != null) { await db.writeTxn(() async { editWorkout.exercises[editExIndex].sets = currentSets; editWorkout.exercises = List.from(editWorkout.exercises); await db.dailyWorkouts.put(editWorkout); }); }
-                    else { final finalDate = targetDate ?? DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day); await db.writeTxn(() async {
+                    else { final finalDate = logDate ?? DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day); await db.writeTxn(() async {
                       var dailyLog = await db.dailyWorkouts.filter().dateEqualTo(finalDate).findFirst(); dailyLog ??= DailyWorkout()..date = finalDate;
                       final loggedEx = LoggedExercise()
                         ..exerciseName = exercise.name
@@ -592,10 +461,38 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ]),
                 const SizedBox(height: 24),
               ],
+              ),
             ),
           );
         });
       }
+    );
+  }
+
+  Future<Exercise?> _pickSupersetExercise(BuildContext sheet, String baseName) async {
+    final db = await DatabaseService().database;
+    final exercises = await db.exercises.where().sortByName().findAll();
+    if (!sheet.mounted) return null;
+    var query = '';
+    return showDialog<Exercise>(context: sheet, builder: (context) =>
+      StatefulBuilder(builder: (context, update) {
+        final matches = exercises.where((exercise) =>
+            exercise.name != baseName && exercise.name.toLowerCase().contains(query)).toList();
+        return AlertDialog(
+          title: const Text('Choose a superset exercise'),
+          content: SizedBox(width: 360, height: MediaQuery.sizeOf(context).height * .34,
+            child: Column(children: [
+              TextField(decoration: const InputDecoration(labelText: 'Find an exercise'),
+                onChanged: (value) => update(() => query = value.trim().toLowerCase())),
+              Expanded(child: matches.isEmpty
+                ? const Center(child: Text('No matching exercises.'))
+                : ListView.builder(itemCount: matches.length, itemBuilder: (context, index) =>
+                  ListTile(title: Text(matches[index].name), onTap: () => Navigator.pop(context, matches[index])))),
+            ]),
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel'))],
+        );
+      }),
     );
   }
 
@@ -997,6 +894,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 children: [
                   TextField(
                     controller: nameController,
+                    onChanged: (_) => setModalState(() {}),
                     style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
                     decoration: InputDecoration(
                       hintText: "Exercise Name",
@@ -1103,7 +1001,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ),
                   if (selectedTargetMuscles.isNotEmpty || selectedSecondaryMuscles.isNotEmpty) ...[
                     const SizedBox(height: 24),
-                    const Text("PREVIEW", style: TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                    const Text('Estimated muscle loading', style: TextStyle(fontWeight: FontWeight.w600)),
+                    Text(MuscleFatigueService.profileSummary(MuscleFatigueService.muscleWeights(
+                        nameController.text, selectedTargetMuscles, selectedSecondaryMuscles))),
                     const SizedBox(height: 8),
                     Container(
                       height: 150,
@@ -1665,7 +1565,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 Center(child: Text("All muscles fully recovered!", style: TextStyle(color: accentRed, fontWeight: FontWeight.bold)))
               else
                 ...sortedMuscles.take(6).map((entry) {
-                  final days = RecoveryPredictor.calculateDaysToRecovery(entry.value);
+                  final days = RecoveryPredictor.calculateDaysToRecovery(_recentMuscleWork, entry.key, DateTime.now());
                   final timeStr = RecoveryPredictor.formatRecoveryTime(days);
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12.0),
@@ -2000,15 +1900,26 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             ..targetMuscle = log.targetMuscle ?? "chest"
                             ..targetMuscles = log.targetMuscles.isNotEmpty ? log.targetMuscles : [log.targetMuscle ?? "chest"]
                             ..secondaryMuscles = log.secondaryMuscles;
-                          return _buildExerciseCard(
-                            tempEx,
-                            showDate: false,
-                            onTap: () {
-                              Navigator.pop(context);
-                              _openLoggingSheet(tempEx, editWorkout: workout, editExIndex: exIndex);
-                            },
-                            sets: log.sets,
-                          );
+                          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            _buildExerciseCard(
+                              tempEx,
+                              showDate: false,
+                              onTap: () {
+                                Navigator.pop(context);
+                                _openLoggingSheet(tempEx, editWorkout: workout, editExIndex: exIndex);
+                              },
+                              sets: log.sets,
+                            ),
+                            for (final (index, set) in log.sets.indexed)
+                              if (set.sequence.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(24, 0, 16, 8),
+                                  child: Text([
+                                    'Set ${index + 1} · ${formatWeightReps(set.weight, set.reps)}',
+                                    ...set.sequence.map(formatSetStep),
+                                  ].join('\n'), style: Theme.of(context).textTheme.bodySmall),
+                                ),
+                          ]);
                         }).toList(),
                       ),
                     ),
@@ -2032,38 +1943,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     'tricep_long_head', 'glutes', 'hamstrings', 'calves',
   ];
 
-  Map<String, double> _getWorkoutMuscleVolumes(DailyWorkout workout) {
-    final volumes = <String, double>{};
-    void add(String muscle, double volume) {
-      volumes[muscle] = (volumes[muscle] ?? 0) + volume;
-      final parent = _subMuscleParent[muscle];
-      if (parent != null) volumes[parent] = (volumes[parent] ?? 0) + volume;
-    }
-
-    for (final exercise in workout.exercises) {
-      var volume = 0.0;
-      for (final set in exercise.sets) {
-        volume += (set.weight > 0 ? set.weight : _bodyweightFallback) * set.reps;
-        for (final subSet in set.subSets) {
-          volume += (subSet.weight > 0 ? subSet.weight : _bodyweightFallback) * subSet.reps;
-        }
-      }
-      if (volume == 0) volume = 1;
-      final mains = exercise.targetMuscles.isNotEmpty
-          ? exercise.targetMuscles
-          : (exercise.targetMuscle == null ? <String>[] : [exercise.targetMuscle!]);
-      for (final muscle in mains) {
-        add(muscle, volume);
-      }
-      for (final muscle in exercise.secondaryMuscles) {
-        add(muscle, volume * 0.4);
-      }
-    }
-    return volumes;
-  }
-
   Widget _buildWorkoutMuscleIcon(DailyWorkout workout, bool isDark) {
-    final volumes = _getWorkoutMuscleVolumes(workout);
+    final volumes = MuscleFatigueService.workoutLoad(workout);
+    final peak = volumes.values.fold(0.15, (a, b) => a > b ? a : b);
     List<String> topMuscles(List<String> muscles) => muscles
       .where((muscle) => (volumes[muscle] ?? 0) > 0)
       .toList()
@@ -2071,7 +1953,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
     Widget faceHeatmap({required bool isFront, required List<String> muscles}) {
       final shownMuscles = muscles.take(5).toList();
-      final maxVolume = shownMuscles.isEmpty ? 1.0 : volumes[shownMuscles.first]!;
       final face = isFront ? 'Front' : 'Back';
       return Semantics(
         label: '$face muscle heatmap',
@@ -2084,7 +1965,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             ),
             ...shownMuscles.map((muscle) => SvgPicture.asset(
               isFront ? 'assets/front_$muscle.svg' : 'assets/back_$muscle.svg',
-              colorFilter: ColorFilter.mode(_getIntensityColor((volumes[muscle]! / maxVolume).clamp(0.2, 1)), BlendMode.srcIn),
+              colorFilter: ColorFilter.mode(_getIntensityColor((volumes[muscle]! / peak).clamp(0.02, 1)), BlendMode.srcIn),
             )),
             Positioned(
               bottom: 0,

@@ -36,7 +36,7 @@ class ProgressionService {
     final sorted = history.toList()..sort((a, b) => b.date.compareTo(a.date));
 
     for (final workout in sorted) {
-      final sets = workout.exercises
+      final sets = workout.trainingExercises
           .where((exercise) => exercise.exerciseName == exerciseName)
           .expand((exercise) => exercise.sets)
           .where((set) => set.reps > 0)

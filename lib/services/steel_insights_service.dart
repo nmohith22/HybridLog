@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:isar/isar.dart';
 
 import '../models/fitness_schema.dart';
+import 'muscle_fatigue_service.dart';
 import 'database_service.dart';
 import 'needle_workout_service.dart';
 
@@ -140,42 +141,38 @@ class SteelInsightsService {
     void calculate(List<DailyWorkout> workouts,
         {bool countCurrent = false, Map<String, double>? maxima}) {
       for (final workout in workouts) {
-        for (final exercise in workout.exercises) {
+        for (final exercise in workout.trainingExercises) {
           exerciseCount += countCurrent ? 1 : 0;
-          var exerciseVolume = 0.0;
-          for (final set in exercise.sets) {
-            setCount += countCurrent ? 1 : 0;
+          for (final set in exercise.sets.where((set) =>
+              set.reps > 0 || set.subSets.any((step) => step.reps > 0))) {
+            setCount += countCurrent && set.reps > 0 ? 1 : 0;
             reps += countCurrent ? set.reps : 0;
             final setVolume = set.weight * set.reps;
             volume += countCurrent ? setVolume : 0;
-            exerciseVolume += setVolume;
-            for (final subSet in set.subSets) {
+            for (final subSet in set.subSets.where((step) => step.reps > 0)) {
               setCount += countCurrent ? 1 : 0;
               reps += countCurrent ? subSet.reps : 0;
               final subVolume = subSet.weight * subSet.reps;
               volume += countCurrent ? subVolume : 0;
-              exerciseVolume += subVolume;
             }
-            if (maxima != null &&
-                set.weight > (maxima[exercise.exerciseName] ?? 0)) {
-              maxima[exercise.exerciseName ?? ''] = set.weight;
+            if (maxima != null) {
+              final name = exercise.exerciseName ?? '';
+              for (final weight in [
+                if (set.reps > 0) set.weight,
+                ...set.subSets
+                    .where((step) => step.reps > 0)
+                    .map((step) => step.weight)
+              ]) {
+                if (weight > (maxima[name] ?? 0)) maxima[name] = weight;
+              }
             }
           }
-          if (countCurrent) {
-            final targets = exercise.targetMuscles.isNotEmpty
-                ? exercise.targetMuscles
-                : (exercise.targetMuscle == null
-                    ? <String>[]
-                    : [exercise.targetMuscle!]);
-            for (final muscle in targets) {
-              muscles[muscle] = (muscles[muscle] ?? 0) +
-                  (targets.isEmpty
-                      ? exerciseVolume
-                      : exerciseVolume / targets.length);
-            }
-            for (final muscle in exercise.secondaryMuscles) {
-              muscles[muscle] = (muscles[muscle] ?? 0) + exerciseVolume * .4;
-            }
+        }
+        if (countCurrent) {
+          for (final entry
+              in MuscleFatigueService.workoutLoad(workout).entries) {
+            muscles.update(entry.key, (value) => value + entry.value,
+                ifAbsent: () => entry.value);
           }
         }
       }

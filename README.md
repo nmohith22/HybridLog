@@ -5,6 +5,7 @@ HybridLog is an Android app for tracking strength workouts and running.
 ## Features
 
 - Log strength workouts, sets, weight, and reps; organize favorite exercises into folders.
+- Record dropsets, rest-pauses, and paired superset exercises in the order performed. Fatigue estimates use the exercises performed, the logged work, and each muscle’s role.
 - Browse workout history with session muscle heatmaps and recovery estimates.
 - Chat with Steel in plain language. The on-device assistant looks up logged sets and mileage, answers follow-ups, prepares log drafts for review, and proposes data changes for approval.
 - Use Steel to plan workouts from history and equipment, ask about past sessions, and get weekly recaps and progression suggestions.

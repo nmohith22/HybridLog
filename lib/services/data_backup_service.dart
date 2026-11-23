@@ -15,7 +15,7 @@ import 'widget_service.dart';
 
 class DataBackupService {
   static const _format = 'HybridLog';
-  static const _version = 3;
+  static const _version = 4;
   static const _maxImportBytes = 50 * 1024 * 1024;
 
   static Future<String?> exportData() async {
@@ -65,6 +65,10 @@ class DataBackupService {
                                           .map((subSet) => {
                                                 'reps': subSet.reps,
                                                 'weight': subSet.weight,
+                                                'pauseSeconds': subSet.pauseSeconds,
+                                                'exerciseName': subSet.exerciseName,
+                                                'targetMuscles': subSet.targetMuscles,
+                                                'secondaryMuscles': subSet.secondaryMuscles,
                                               })
                                           .toList(),
                                     })
@@ -286,9 +290,18 @@ class DataBackupService {
       ..restPauseSeconds = restPause
       ..subSets = _list(data['subSets'], 'set.subSets').map((value) {
         final subSet = _asMap(value, 'subset');
+        final pause = subSet['pauseSeconds'];
+        final name = _optionalString(subSet['exerciseName'], 'subset.exerciseName');
+        if (pause != null && name != null) {
+          throw const FormatException('A sequence step must be a pause, dropset or superset.');
+        }
         return SubSetLog()
           ..reps = _boundedInteger(subSet['reps'], 'subset.reps', 0, 10000)
-          ..weight = _boundedNumber(subSet['weight'], 'subset.weight', 1000000);
+          ..weight = _boundedNumber(subSet['weight'], 'subset.weight', 1000000)
+          ..pauseSeconds = pause == null ? null : _boundedInteger(pause, 'subset.pauseSeconds', 0, 60)
+          ..exerciseName = name
+          ..targetMuscles = _stringList(subSet['targetMuscles'], 'subset.targetMuscles', const [])
+          ..secondaryMuscles = _stringList(subSet['secondaryMuscles'], 'subset.secondaryMuscles', const []);
       }).toList();
   }
 

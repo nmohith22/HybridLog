@@ -139,6 +139,9 @@ void main() {
         fail('$prompt: $error\n$lastModelOutput');
       });
       expect(reply.action?.operation, operation, reason: reply.text);
+      if (prompt.startsWith('Add Cable Fly')) {
+        expect(reply.action?.summary, contains('chest (high)'));
+      }
       await NeedleWorkoutService.applyApprovedDataAction(reply.action!);
     }
 
@@ -185,6 +188,60 @@ void main() {
     await expectLater(
         SteelChatService.ask('Delete all folders.'), throwsFormatException);
     expect(completions, before);
+  });
+
+  test('ordered steps round-trip in Isar and keep paired exercise history',
+      () async {
+    final main = SetLog()
+      ..weight = 125
+      ..reps = 8
+      ..subSets = [
+        SubSetLog()
+          ..weight = 85
+          ..reps = 5,
+        SubSetLog()
+          ..pauseSeconds = 12
+          ..weight = 85
+          ..reps = 3,
+        SubSetLog()
+          ..exerciseName = 'Cable Row'
+          ..targetMuscles = ['lats']
+          ..weight = 75
+          ..reps = 10,
+        SubSetLog()
+          ..weight = 50
+          ..reps = 5,
+      ];
+    final workout = DailyWorkout()
+      ..date = DateTime(2024, 2, 1)
+      ..exercises = [
+        LoggedExercise()
+          ..exerciseName = 'Bench Press'
+          ..targetMuscles = ['chest']
+          ..sets = [main],
+      ];
+    await db.writeTxn(() => db.dailyWorkouts.put(workout));
+    try {
+      final found = await db.dailyWorkouts
+          .filter()
+          .exercisesElement((ex) => ex.setsElement((set) => set
+              .subSetsElement((step) => step.exerciseNameEqualTo('Cable Row'))))
+          .findFirst();
+      expect(found, isNotNull);
+      final saved = found!.exercises.single.sets.single;
+      expect(
+          saved.sequence.map((s) => (s.exerciseName, s.pauseSeconds, s.reps)), [
+        (null, null, 5),
+        (null, 12, 3),
+        ('Cable Row', null, 10),
+        (null, null, 5)
+      ]);
+      final paired = found.trainingExercises.last;
+      expect(paired.targetMuscles, ['lats']);
+      expect(paired.sets.single.subSets.single.reps, 5);
+    } finally {
+      await db.writeTxn(() => db.dailyWorkouts.delete(workout.id));
+    }
   });
 
   test('chat answers with exact log data even when Needle abstains', () async {

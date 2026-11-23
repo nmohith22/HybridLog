@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/fitness_schema.dart';
+import 'muscle_fatigue_service.dart';
 import '../utils/weight_reps_format.dart';
 import 'database_service.dart';
 import 'equipment_profile_service.dart';
@@ -472,6 +473,13 @@ class NeedleWorkoutService {
       }
       fields['target_muscle'] = muscle.toLowerCase().replaceAll(' ', '_');
     }
+    if (fields.containsKey('secondary_muscles')) {
+      final muscles = _stringList(fields['secondary_muscles'], const []);
+      if (muscles.any((muscle) => !_phraseIn(request, muscle))) {
+        throw const FormatException('Please name the secondary muscles to include.');
+      }
+      fields['secondary_muscles'] = muscles.map((muscle) => muscle.toLowerCase().replaceAll(' ', '_')).toList();
+    }
     if (type == 'workout' && fields.containsKey('name')) {
       final name = _recordString(fields, 'name');
       final exercise = await db.exercises
@@ -567,6 +575,7 @@ class NeedleWorkoutService {
       if (type == 'exercise' && !renaming) {
         field('target_muscle', 'Primary muscle explicitly named by the user',
             needed: operation == 'create');
+        field('secondary_muscles', 'Secondary muscles explicitly named by the user', kind: 'array');
       }
       if (type == 'run') {
         field('miles', 'Logged mileage in whole miles',
@@ -957,7 +966,7 @@ class NeedleWorkoutService {
             : _exerciseFrom(record, existing: existing);
         summary = switch (action.operation) {
           'create' =>
-            'Create exercise "${proposed.name}" (${proposed.targetMuscle}).',
+            'Create exercise "${proposed.name}". Estimated muscle loading: ${MuscleFatigueService.profileSummary(MuscleFatigueService.exerciseWeights(proposed))}.',
           'update' =>
             'Update exercise "${existing!.name}" to "${proposed.name}" (${proposed.targetMuscle}).',
           _ =>
@@ -1110,10 +1119,19 @@ class NeedleWorkoutService {
               ? null
               : _boundedInt(rest, 'rest_pause_seconds', 0, 60)
           ..subSets = subsets.map((subsetValue) {
-            final subset = _recordMap(subsetValue, 'dropset');
+            final subset = _recordMap(subsetValue, 'sequence step');
+            final pause = subset['pause_seconds'];
+            final paired = subset['exercise_name'];
+            if (pause != null && paired != null) {
+              throw const FormatException('A sequence step must be a pause, dropset or superset.');
+            }
             return SubSetLog()
               ..reps = _boundedInt(subset['reps'], 'reps', 0, 10000)
-              ..weight = _boundedDouble(subset['weight'], 'weight', 1000000);
+              ..weight = _boundedDouble(subset['weight'], 'weight', 1000000)
+              ..pauseSeconds = pause == null ? null : _boundedInt(pause, 'pause_seconds', 0, 60)
+              ..exerciseName = paired == null ? null : _recordString(subset, 'exercise_name')
+              ..targetMuscles = _stringList(subset['target_muscles'], const [])
+              ..secondaryMuscles = _stringList(subset['secondary_muscles'], const []);
           }).toList();
       }).toList();
       return logged;
@@ -1182,7 +1200,7 @@ class NeedleWorkoutService {
     final used = <String, int>{};
     final recent = history.toList()..sort((a, b) => b.date.compareTo(a.date));
     for (final workout in recent.take(20)) {
-      for (final logged in workout.exercises) {
+      for (final logged in workout.trainingExercises) {
         final name = logged.exerciseName;
         if (name != null) used[name] = (used[name] ?? 0) + 1;
       }
@@ -1209,7 +1227,7 @@ class NeedleWorkoutService {
         .map((workout) => {
               'date':
                   '${workout.date.year}-${workout.date.month.toString().padLeft(2, '0')}-${workout.date.day.toString().padLeft(2, '0')}',
-              'exercises': workout.exercises
+              'exercises': workout.trainingExercises
                   .map((e) => e.exerciseName)
                   .whereType<String>()
                   .take(12)
@@ -1224,6 +1242,7 @@ class NeedleWorkoutService {
                       .take(3)
                       .toList(),
               'used_before': (used[e.name] ?? 0) > 0,
+              'relative_muscle_loading': MuscleFatigueService.exerciseWeights(e),
             })
         .toList();
     final request = jsonEncode({
@@ -1291,11 +1310,8 @@ class NeedleWorkoutService {
 
   static double _rank(
       Exercise exercise, Map<String, int> used, Map<String, double> fatigue) {
-    final targets = exercise.targetMuscles.isEmpty
-        ? [exercise.targetMuscle]
-        : exercise.targetMuscles;
-    final strain = targets
-        .map((muscle) => fatigue[muscle] ?? 0)
+    final strain = MuscleFatigueService.exerciseWeights(exercise).entries
+        .map((entry) => (fatigue[entry.key] ?? 0) * entry.value.clamp(0.0, 1.0))
         .fold<double>(0, (a, b) => a > b ? a : b);
     final familiarity = (used[exercise.name] ?? 0) > 0
         ? 2.0

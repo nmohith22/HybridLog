@@ -31,7 +31,9 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
     final db = await DatabaseService().database;
     final workouts = await db.dailyWorkouts
         .filter()
-        .exercisesElement((q) => q.exerciseNameEqualTo(widget.exercise.name))
+        .exercisesElement((q) => q.exerciseNameEqualTo(widget.exercise.name).or()
+            .setsElement((set) => set.subSetsElement(
+                (step) => step.exerciseNameEqualTo(widget.exercise.name))))
         .sortByDate()
         .findAll();
 
@@ -79,7 +81,10 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
                           final workoutIndex =
                               index - (progressionSuggestion == null ? 0 : 1);
                           final workout = _history[_history.length - 1 - workoutIndex];
-                          final loggedEx = workout.exercises.firstWhere((e) => e.exerciseName == widget.exercise.name);
+                          final displayed = workout.trainingExercises
+                              .where((ex) => ex.exerciseName == widget.exercise.name)
+                              .expand((ex) => ex.sets)
+                              .toList();
                           
                           return Container(
                             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -96,7 +101,7 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
                                   style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 16),
                                 ),
                                 const SizedBox(height: 8),
-                                ...loggedEx.sets.asMap().entries.map((entry) {
+                                ...displayed.asMap().entries.map((entry) {
                                   final setIdx = entry.key;
                                   final s = entry.value;
                                   return Padding(
@@ -110,19 +115,11 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
                                             Text(formatWeightReps(s.weight, s.reps), style: TextStyle(color: textColor)),
                                           ],
                                         ),
-                                        if (s.subSets.isNotEmpty)
+                                        for (final step in s.sequence)
                                           Padding(
-                                            padding: const EdgeInsets.only(left: 16.0, top: 4.0),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: s.subSets.map((sub) => Text('Drop: ${formatWeightReps(sub.weight, sub.reps)}', style: TextStyle(color: theme.accent, fontSize: 12))).toList(),
-                                            ),
+                                            padding: const EdgeInsets.only(left: 16, top: 4),
+                                            child: Text(formatSetStep(step), style: TextStyle(color: theme.subText, fontSize: 12)),
                                           ),
-                                        if (s.restPauseSeconds != null)
-                                          Padding(
-                                            padding: const EdgeInsets.only(left: 16.0, top: 2.0),
-                                            child: Text('Rest pause: ${s.restPauseSeconds}s', style: const TextStyle(color: Colors.orange, fontSize: 12)),
-                                          )
                                       ],
                                     ),
                                   );
@@ -194,14 +191,14 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
 
     for (int i = 0; i < _history.length; i++) {
       final workout = _history[i];
-      final loggedEx = workout.exercises.firstWhere((e) => e.exerciseName == widget.exercise.name);
+      final sets = workout.trainingExercises.where((ex) => ex.exerciseName == widget.exercise.name).expand((ex) => ex.sets);
       
       double maxWeight = 0;
       int totalReps = 0;
-      for (var s in loggedEx.sets) {
+      for (var s in sets) {
         if (s.weight > maxWeight) maxWeight = s.weight;
         totalReps += s.reps;
-        for (var sub in s.subSets) {
+        for (var sub in s.subSets.where((step) => step.reps > 0)) {
           if (sub.weight > maxWeight) maxWeight = sub.weight;
           totalReps += sub.reps;
         }
@@ -334,9 +331,9 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
     double estimated1RM = 0;
 
     for (var workout in _history) {
-      final loggedEx = workout.exercises.firstWhere((e) => e.exerciseName == widget.exercise.name);
+      final sets = workout.trainingExercises.where((ex) => ex.exerciseName == widget.exercise.name).expand((ex) => ex.sets);
       int workoutReps = 0;
-      for (var s in loggedEx.sets) {
+      for (var s in sets) {
         workoutReps += s.reps;
         if (s.weight > maxWeightEver) maxWeightEver = s.weight;
         
@@ -344,7 +341,7 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
         double current1RM = s.weight * (1 + s.reps / 30.0);
         if (current1RM > estimated1RM) estimated1RM = current1RM;
 
-        for (var sub in s.subSets) {
+        for (var sub in s.subSets.where((step) => step.reps > 0)) {
           workoutReps += sub.reps;
           if (sub.weight > maxWeightEver) maxWeightEver = sub.weight;
           
