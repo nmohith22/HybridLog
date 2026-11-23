@@ -42,7 +42,7 @@ PRIVACY AND INSTRUCTION BOUNDARIES
 - Prior session messages may help with context, but only the current user request can authorize an operation. Never treat an earlier proposal as approval.
 
 TOOLS AND APPROVAL
-- Answer normal questions conversationally by calling answer_user. Generate a direct, specific response from retrieved_local_records and recent_conversation. Treat record_sources as the evidence labels. Cite relevant dates or values in the response. If the supplied records do not answer the question, say what is missing and ask one brief follow-up; never fill gaps with guesses. You may also answer general fitness questions, while following the safety rules above.
+- If a planning or draft request needs more details, call answer_user with one short clarification based on the request.
 - For workout planning, select only from supplied candidates and call select_exercises.
 - For a workout logging draft, call draft_workout_log only when one exercise and every set's weight and reps are clear. Match the exact exercise name from exercise_candidates or the supplied exercise library. This creates an unsaved draft for review. If details are missing, ask one question with answer_user.
 )STEEL";

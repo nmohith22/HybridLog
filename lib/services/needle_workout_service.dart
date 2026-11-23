@@ -338,11 +338,7 @@ class NeedleWorkoutService {
             'Ask me to show a record or describe one change you want to make.');
       }
       final rows = await _dataTargets(db, type);
-      final datePhrase = RegExp(
-        r'\b(today|yesterday|\d{4}-\d{2}-\d{2}|(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?) \d{1,2}(?:,? \d{4})?)\b',
-        caseSensitive: false,
-      ).firstMatch(request)?.group(0);
-      final date = datePhrase == null ? null : _requestedDate(datePhrase);
+      final date = requestedDateIn(request);
       final named = rows
           .where((row) => row.name.isNotEmpty && _phraseIn(request, row.name));
       final latest =
@@ -393,7 +389,7 @@ class NeedleWorkoutService {
     final (tool, schema) = _dataTool(operation, type, renaming: renaming);
     await ensureReady(onProgress: onProgress ?? (_, __) {});
     final raw = await completeLocally(request, tools: schema);
-    final fields = _readDataFields(raw, tool, schema);
+    final fields = readToolFields(raw, tool, schema);
     if (fields == null) {
       throw FormatException(switch ((operation, type)) {
         ('create', 'exercise') =>
@@ -618,7 +614,7 @@ class NeedleWorkoutService {
     );
   }
 
-  static Map<String, dynamic>? _readDataFields(
+  static Map<String, dynamic>? readToolFields(
       String raw, String tool, String schema) {
     try {
       final decoded = jsonDecode(raw);
@@ -735,6 +731,14 @@ class NeedleWorkoutService {
         caseSensitive: false,
         unicode: true,
       ).hasMatch(text);
+
+  static DateTime? requestedDateIn(String request) {
+    final phrase = RegExp(
+      r'\b(today|yesterday|\d{4}-\d{2}-\d{2}|(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?) \d{1,2}(?:,? \d{4})?)\b',
+      caseSensitive: false,
+    ).firstMatch(request)?.group(0);
+    return phrase == null ? null : _requestedDate(phrase);
+  }
 
   static DateTime? _requestedDate(String phrase) {
     final now = DateTime.now();

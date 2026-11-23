@@ -17,8 +17,7 @@ A senior-engineered, high-performance fitness tracking application built with Fl
 
 ## GitHub & Deployment
 - **Repository:** [https://github.com/nmohith22/HybridLog.git](https://github.com/nmohith22/HybridLog.git)
-- **Releases:** The `release/HybridLog.apk` file must be updated and committed whenever a major UI or logic milestone is reached.
-- **Workflow:** Always `git add .`, `git commit`, and `git push origin main` after verifying changes.
+- **Tests and releases:** Follow the test gate in [AGENTS.md](AGENTS.md) before building a release APK or pushing. The release workflow publishes versioned APKs from `release/`.
 
 ## Resumption Instructions
 - **Checkpoint-First:** When asked to "resume from the most recent chat" or "pick up where we left off," always check the **Checkpoint: May 3, 2026** section below. 

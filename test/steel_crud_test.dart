@@ -20,6 +20,7 @@ void main() {
   late Isar db;
   var completions = 0;
   var lastModelOutput = '';
+  var abstainOnHistory = false;
   final responses = {
     'create_folder': {'name': 'Push Day'},
     'rename_folder': {'target': 'Push Day', 'name': 'Monday Push'},
@@ -90,6 +91,10 @@ void main() {
           completions++;
           final schema = call.arguments['tools'] as String;
           final tool = (jsonDecode(schema) as List).single['function']['name'];
+          if (tool == 'search_training_history' &&
+              (abstainOnHistory || cli == null)) {
+            return '{"success":true,"function_calls":[],"suppressed_calls":[]}';
+          }
           if (cli != null) {
             await toolsFile.writeAsString(schema);
             final result = await Process.run(cli, [
@@ -180,6 +185,78 @@ void main() {
     await expectLater(
         SteelChatService.ask('Delete all folders.'), throwsFormatException);
     expect(completions, before);
+  });
+
+  test('chat answers with exact log data even when Needle abstains', () async {
+    final today = DateTime.now();
+    final recent = DateTime(today.year, today.month, today.day);
+    final earlier = DateTime(today.year, today.month, today.day - 3);
+    DailyWorkout bench(DateTime date, double weight) => DailyWorkout()
+      ..date = date
+      ..exercises = [
+        LoggedExercise()
+          ..exerciseName = 'Barbell Bench Press'
+          ..sets = [
+            SetLog()
+              ..weight = weight
+              ..reps = 8
+          ],
+        LoggedExercise()
+          ..exerciseName = 'Cable Row'
+          ..sets = [
+            SetLog()
+              ..weight = 60
+              ..reps = 10
+          ],
+      ];
+    await db.writeTxn(() async {
+      await db.dailyWorkouts.putAll([bench(recent, 135), bench(earlier, 125)]);
+    });
+    const question = 'What did I bench last time?';
+    final before = completions;
+    final reply = await SteelChatService.ask(question);
+    expect(completions, greaterThan(before),
+        reason: 'The model path should run.');
+    expect(
+        reply.text,
+        allOf(contains('Barbell Bench Press'), contains('135 lbs x 8 reps'),
+            isNot(contains('Cable Row')), isNot(contains('125 lbs'))));
+    expect(reply.sources, hasLength(1));
+    expect(reply.action, isNull);
+
+    abstainOnHistory = true;
+    try {
+      final followUp = await SteelChatService.ask(
+        'What about the time before that?',
+        sessionHistory: [
+          {'role': 'user', 'content': question},
+          {'role': 'assistant', 'content': reply.text},
+        ],
+      );
+      expect(followUp.text,
+          allOf(contains('125 lbs'), isNot(contains('135 lbs'))));
+      final setCount = await SteelChatService.ask(
+        'How many sets was that?',
+        sessionHistory: [
+          {'role': 'user', 'content': question},
+          {'role': 'assistant', 'content': reply.text},
+        ],
+      );
+      expect(setCount.text, contains('1 set and 8 reps'));
+      final heaviest =
+          await SteelChatService.ask('What’s my heaviest bench press?');
+      expect(heaviest.text, contains('135 lbs x 8 reps'));
+      final count = await SteelChatService.ask('How many workouts did I log?');
+      expect(count.text, contains('2 workouts'));
+      final noMatch =
+          await SteelChatService.ask('What was my workout on 2000-01-01?');
+      expect(
+          noMatch.text, contains('don’t see a logged workout on 2000-01-01'));
+      expect(noMatch.sources, isEmpty);
+    } finally {
+      abstainOnHistory = false;
+      await db.writeTxn(() => db.dailyWorkouts.clear());
+    }
   });
 
   testWidgets(

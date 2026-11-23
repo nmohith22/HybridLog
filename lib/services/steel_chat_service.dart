@@ -1,11 +1,14 @@
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:isar/isar.dart';
 
 import '../models/fitness_schema.dart';
+import '../utils/weight_reps_format.dart';
 import 'database_service.dart';
 import 'equipment_profile_service.dart';
 import 'needle_workout_service.dart';
+import 'progression_service.dart';
 import 'steel_guardrails.dart';
 
 class SteelLocalDocument {
@@ -41,6 +44,20 @@ class SteelChatReply {
 }
 
 class SteelChatService {
+  static const _historyTool = 'search_training_history';
+  static const _historyTools = '''
+[
+  {"type":"function","function":{
+    "name":"search_training_history",
+    "description":"Look up or compare old workout sessions, exercises, logged sets and weights, or running mileage from personal training history.",
+    "parameters":{"type":"object","properties":{
+      "view":{"type":"string","enum":["latest","heaviest","count","list","compare","weekly"],
+              "description":"Return the latest session, heaviest weight, count sessions, list dates and sets, compare two sessions, or give a weekly recap."}
+    },"required":["view"]}
+  }}
+]
+''';
+
   static const _stopWords = {
     'a',
     'about',
@@ -150,9 +167,11 @@ class SteelChatService {
       throw const FormatException('Keep each message under 1,200 characters.');
     }
 
-    if (NeedleWorkoutService.dataRecordType(request) != null &&
+    final type = NeedleWorkoutService.dataRecordType(request);
+    if (type != null &&
         (SteelGuardrails.requestedMutation(request) != null ||
-            NeedleWorkoutService.isDataRead(request))) {
+            (type == 'folder' || type == 'exercise') &&
+                NeedleWorkoutService.isDataRead(request))) {
       final action = await NeedleWorkoutService.proposeDataAction(
         request,
         onProgress: onProgress,
@@ -163,6 +182,15 @@ class SteelChatService {
               text: 'Review this change before applying it.',
               action: action,
             );
+    }
+
+    final words = _normalize(request);
+    final askingForDraftOrPlan = RegExp(
+          r'^(?:please |(?:can|could|would) you |(?:help me|i want to|id like to) )*(?:plan|build|make|suggest|recommend|log|record|draft)\b',
+        ).hasMatch(words) ||
+        words == 'help me turn a workout into a draft';
+    if (!askingForDraftOrPlan) {
+      return _answerHistory(request, sessionHistory, onProgress);
     }
 
     await NeedleWorkoutService.ensureReady(
@@ -195,9 +223,9 @@ class SteelChatService {
     final calls = decoded['function_calls'];
     if (calls is! List || calls.isEmpty) {
       return SteelChatReply(
-        text:
-            'I couldn’t find a reliable answer yet. Try asking about a specific exercise, workout date, or what you want to log.',
-        sources: retrieved.map((source) => source.label).toList(),
+        text: words.contains('draft') || words.startsWith('log')
+            ? 'Tell me the exercise and the weight and reps for each set. For example, bench press at 135 lbs for 8 and 6 reps.'
+            : 'Choose Build a workout to plan a session around your equipment and the muscles you want to train.',
       );
     }
 
@@ -260,6 +288,299 @@ class SteelChatService {
       default:
         throw const FormatException('Steel selected an unsupported tool.');
     }
+  }
+
+  static Future<SteelChatReply> _answerHistory(
+    String question,
+    List<Map<String, String>> sessionHistory,
+    void Function(int, int)? onProgress,
+  ) async {
+    final words = _normalize(question);
+    if (RegExp(r'^(hi|hey|hello)( steel)?$').hasMatch(words)) {
+      return const SteelChatReply(
+        text:
+            'Hey! I can look up your past sets, compare workouts, or recap your running. What do you want to check?',
+      );
+    }
+    if (RegExp(r'^(thanks|thank you)( steel)?$').hasMatch(words)) {
+      return const SteelChatReply(text: 'You’re welcome!');
+    }
+    if (RegExp(r'\b(what is|what are|what do|difference between)\b')
+            .hasMatch(words) &&
+        RegExp(r'\b(sets?|reps?)\b').hasMatch(words) &&
+        !RegExp(r'\b(my|did|log|mean for)\b').hasMatch(words)) {
+      return const SteelChatReply(
+        text:
+            'A rep is one repetition of an exercise. A set is a group of reps done together before you rest. If you do 8 bench presses, rest, then do 6 more, that’s two sets.',
+      );
+    }
+
+    final db = await DatabaseService().database;
+    final workouts = await db.dailyWorkouts.where().sortByDateDesc().findAll();
+    final runs = await db.runningLogs.where().sortByDateDesc().findAll();
+    final names = workouts
+        .expand((w) => w.exercises)
+        .map((ex) => ex.exerciseName)
+        .whereType<String>()
+        .toSet();
+    final matched = _matchedExercises(question, names);
+    final explicitTypes =
+        NeedleWorkoutService.dataRecordTypes(question).toSet();
+    final date = NeedleWorkoutService.requestedDateIn(question);
+    final followUp = matched.isEmpty &&
+        explicitTypes.isEmpty &&
+        RegExp(r'\b(that|those|it|time before|previous one|how about|what about)\b')
+            .hasMatch(words);
+    final prior = followUp
+        ? sessionHistory.reversed
+            .where((turn) => turn['role'] == 'user')
+            .map((turn) => turn['content'] ?? '')
+            .firstWhere(
+                (text) =>
+                    _matchedExercises(text, names).isNotEmpty ||
+                    NeedleWorkoutService.dataRecordTypes(text)
+                        .any((type) => type == 'run' || type == 'workout') ||
+                    RegExp(r'\b(last time|my training)\b')
+                        .hasMatch(_normalize(text)),
+                orElse: () => '')
+        : '';
+    final selectedNames =
+        matched.isNotEmpty ? matched : _matchedExercises(prior, names);
+    final types = explicitTypes.isNotEmpty
+        ? explicitTypes
+        : NeedleWorkoutService.dataRecordTypes(prior).toSet();
+    final week = RegExp(r'\b(this|current|last|previous) week\b')
+        .firstMatch(words)
+        ?.group(1);
+    final knownHistory = selectedNames.isNotEmpty ||
+        types.contains('run') ||
+        types.contains('workout') ||
+        date != null &&
+            (types.contains('exercise') ||
+                words.startsWith('what did i do ')) ||
+        RegExp(r'\b(last time|training|history|logged|lifted|pr)\b')
+            .hasMatch(words) ||
+        prior.isNotEmpty;
+    if (!knownHistory) {
+      return const SteelChatReply(
+        text:
+            'I can help with your workouts and runs. Ask what you lifted last time, how many sessions you logged this week, or what to put in your next workout.',
+      );
+    }
+
+    String? view;
+    try {
+      await NeedleWorkoutService.ensureReady(
+          onProgress: onProgress ?? (_, __) {});
+      final raw = await NeedleWorkoutService.completeLocally(
+        prior.isEmpty
+            ? question
+            : 'Previous question: $prior\nFollow-up: $question',
+        tools: _historyTools,
+      );
+      view = NeedleWorkoutService.readToolFields(
+          raw, _historyTool, _historyTools)?['view'] as String?;
+    } on UnsupportedError {
+      // Local records still answer the question on a device without Needle.
+    } on PlatformException {
+      // A failed inference does not make the retrieved records unavailable.
+    } on StateError {
+      // The native runtime may fail to initialize.
+    } on FormatException {
+      // The bundled model may be unreadable.
+    }
+    // ponytail: prioritize explicit cues where the small extraction model
+    // abstains or confuses a statistic; richer phrasing can use its view.
+    if (RegExp(r'\b(heaviest|highest weight|personal record|pr|max weight)\b')
+        .hasMatch(words)) {
+      view = 'heaviest';
+    } else if (RegExp(r'\b(compare|progress|improv\w*|better)\b')
+        .hasMatch(words)) {
+      view = 'compare';
+    } else if (RegExp(r'\b(how many|total|how much mileage)\b')
+        .hasMatch(words)) {
+      view = 'count';
+    } else if (RegExp(r'\b(summarize|recap|weekly)\b').hasMatch(words)) {
+      view = 'weekly';
+    } else if (RegExp(
+            r'\b(last time|last workout|last run|latest|most recent|time before)\b')
+        .hasMatch(words)) {
+      view = 'latest';
+    } else if (date != null) {
+      view = 'latest';
+    }
+
+    final now = DateTime.now();
+    final lastWeek = week == 'last' || week == 'previous';
+    final start = DateTime(
+        now.year, now.month, now.day - now.weekday + 1 - (lastWeek ? 7 : 0));
+    final end = DateTime(start.year, start.month, start.day + 7);
+    final requestedDay = date ??
+        (prior.isEmpty || view == 'compare'
+            ? null
+            : NeedleWorkoutService.requestedDateIn(prior));
+    bool inPeriod(DateTime value) {
+      if (requestedDay != null) return _date(value) == _date(requestedDay);
+      return week == null && view != 'weekly' ||
+          !value.isBefore(start) && value.isBefore(end);
+    }
+
+    final runOnly = types.contains('run') &&
+        !types.contains('workout') &&
+        selectedNames.isEmpty;
+    final includeRuns = runOnly ||
+        types.contains('run') ||
+        selectedNames.isEmpty && !types.contains('workout') && view == 'weekly';
+    final strength = runOnly
+        ? <DailyWorkout>[]
+        : workouts
+            .where((workout) =>
+                inPeriod(workout.date) &&
+                (selectedNames.isEmpty ||
+                    workout.exercises
+                        .any((ex) => selectedNames.contains(ex.exerciseName))))
+            .toList();
+    final running = includeRuns
+        ? runs.where((run) => inPeriod(run.date)).toList()
+        : <RunningLog>[];
+    final activity = runOnly ? 'run' : 'workout';
+    final focus =
+        selectedNames.isEmpty ? '' : ' with ${selectedNames.join(' or ')}';
+    if (strength.isEmpty && running.isEmpty) {
+      final period = requestedDay != null
+          ? ' on ${_date(requestedDay)}'
+          : week != null || view == 'weekly'
+              ? (lastWeek ? ' last week' : ' this week')
+              : '';
+      return SteelChatReply(
+          text: 'I don’t see a logged $activity$focus$period.');
+    }
+
+    Iterable<LoggedExercise> exercises(DailyWorkout w) =>
+        w.exercises.where((ex) =>
+            selectedNames.isEmpty || selectedNames.contains(ex.exerciseName));
+    if (selectedNames.length == 1 &&
+        RegExp(r'\b(next time|next session|aim for)\b').hasMatch(words)) {
+      final name = selectedNames.single;
+      final target = ProgressionService.suggestNextTarget(name, strength);
+      if (target != null) {
+        return SteelChatReply(
+          text:
+              'For your next $name session, try ${formatWeightReps(target.weight, target.reps)}. ${target.rationale}',
+          sources: target.supportingSessions
+              .map((session) =>
+                  '${_date(session.date)} · ${formatWeightReps(session.topWeight, session.topWeightReps)}')
+              .toList(),
+        );
+      }
+    }
+    if (view == 'heaviest' && strength.isNotEmpty) {
+      ({DailyWorkout workout, LoggedExercise exercise, SetLog set})? best;
+      for (final workout in strength) {
+        for (final exercise in exercises(workout)) {
+          for (final set in exercise.sets) {
+            if (best == null || set.weight > best.set.weight) {
+              best = (workout: workout, exercise: exercise, set: set);
+            }
+          }
+        }
+      }
+      if (best != null) {
+        final set = best.set;
+        final label =
+            '${_date(best.workout.date)} · ${best.exercise.exerciseName}';
+        return SteelChatReply(
+          text:
+              'Your heaviest logged ${best.exercise.exerciseName} set was ${formatWeightReps(set.weight, set.reps)} on ${_date(best.workout.date)}.',
+          sources: [label],
+        );
+      }
+    }
+    if (view == 'count' || view == 'weekly') {
+      final scope = requestedDay != null
+          ? ' on ${_date(requestedDay)}'
+          : week != null || view == 'weekly'
+              ? (lastWeek ? ' last week' : ' this week')
+              : ' in your history';
+      final summaries = <String>[];
+      if (!runOnly) {
+        final singleSession = followUp ||
+            RegExp(r'\b(last time|last workout|latest|most recent)\b')
+                .hasMatch(words);
+        final sessions = singleSession ? strength.take(1).toList() : strength;
+        final sets =
+            sessions.expand(exercises).expand((ex) => ex.sets).toList();
+        final reps = sets.fold<int>(0, (total, set) => total + set.reps);
+        final volume =
+            '${sets.length} ${sets.length == 1 ? 'set' : 'sets'} and $reps ${reps == 1 ? 'rep' : 'reps'}';
+        summaries.add(singleSession && sessions.isNotEmpty
+            ? 'On ${_date(sessions.first.date)}, you logged $volume$focus.'
+            : 'You logged ${sessions.length} ${sessions.length == 1 ? 'workout' : 'workouts'}$focus$scope, with $volume.');
+      }
+      if (includeRuns) {
+        final miles = running.fold<int>(0, (sum, run) => sum + run.miles);
+        summaries.add(
+            'You logged ${running.length} ${running.length == 1 ? 'run' : 'runs'} totaling $miles ${miles == 1 ? 'mile' : 'miles'}$scope.');
+      }
+      return SteelChatReply(text: summaries.join(' '));
+    }
+
+    final earlier =
+        RegExp(r'\b(time before|previous one|one before|penultimate)\b')
+            .hasMatch(words);
+    final rows = [
+      for (final workout in strength)
+        (
+          date: workout.date,
+          label:
+              '${_date(workout.date)} · ${exercises(workout).map((ex) => ex.exerciseName).join(', ')}',
+          details: exercises(workout)
+              .map((ex) =>
+                  '${ex.exerciseName}: ${ex.sets.map((set) => formatWeightReps(set.weight, set.reps)).join(', ')}')
+              .join('\n')
+        ),
+      for (final run in running)
+        (
+          date: run.date,
+          label: '${_date(run.date)} · ${run.miles} mi',
+          details: 'You ran ${run.miles} ${run.miles == 1 ? 'mile' : 'miles'}.'
+        ),
+    ]..sort((a, b) => b.date.compareTo(a.date));
+    final limit = view == 'compare'
+        ? 2
+        : view == 'list' || requestedDay != null
+            ? 4
+            : 1;
+    final shown = rows.skip(earlier ? 1 : 0).take(limit).toList();
+    if (shown.isEmpty) {
+      return SteelChatReply(
+          text:
+              'I found one logged $activity$focus. I don’t see an earlier one.');
+    }
+    final intro = view == 'compare' && shown.length == 2
+        ? 'Here are the two most recent entries$focus:'
+        : shown.length == 1
+            ? 'Here’s what you logged on ${_date(shown.single.date)}:'
+            : 'Here are the matching entries$focus:';
+    return SteelChatReply(
+      text:
+          '$intro\n${shown.map((row) => shown.length == 1 ? row.details : '${_date(row.date)}\n${row.details}').join('\n\n')}',
+      sources: shown.map((row) => row.label).toList(),
+    );
+  }
+
+  static Set<String> _matchedExercises(String question, Set<String> names) {
+    final query = _terms(question);
+    final matches = {
+      for (final name in names) name: _terms(name).intersection(query).length
+    };
+    final best =
+        matches.values.fold<int>(0, (max, score) => score > max ? score : max);
+    return {
+      if (best > 0)
+        for (final entry in matches.entries)
+          if (entry.value == best) entry.key
+    };
   }
 
   static Future<List<SteelLocalDocument>> _loadDocuments(
