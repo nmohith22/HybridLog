@@ -69,7 +69,7 @@ class _SteelLogDraftDialogState extends State<SteelLogDraftDialog> {
     return AlertDialog(
       backgroundColor: theme.card,
       title:
-          Text('Log a workout with Steel', style: TextStyle(color: theme.text)),
+          Text('Log a Workout with Steel', style: TextStyle(color: theme.text)),
       content: SizedBox(
         width: 460,
         child: Column(

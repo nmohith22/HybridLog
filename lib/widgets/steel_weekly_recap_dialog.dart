@@ -40,7 +40,7 @@ class _SteelWeeklyRecapDialogState extends State<SteelWeeklyRecapDialog> {
     final end = recap?.weekStart.add(const Duration(days: 6));
     return AlertDialog(
       backgroundColor: theme.card,
-      title: Text('Weekly training recap', style: TextStyle(color: theme.text)),
+      title: Text('Weekly Training Recap', style: TextStyle(color: theme.text)),
       content: SizedBox(
         width: 460,
         child: recap == null

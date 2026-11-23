@@ -121,7 +121,7 @@ class _WeatherAdviceWidgetState extends State<WeatherAdviceWidget> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  weather?.location ?? 'Run conditions',
+                  weather?.location ?? 'Run Conditions',
                   style: theme.textTheme.titleLarge,
                 ),
               ),

@@ -67,7 +67,7 @@ class _SteelHistoryQuestionDialogState
     return AlertDialog(
       backgroundColor: theme.card,
       title:
-          Text('Ask my workout history', style: TextStyle(color: theme.text)),
+          Text('Ask My Workout History', style: TextStyle(color: theme.text)),
       content: SizedBox(
         width: 480,
         child: Column(

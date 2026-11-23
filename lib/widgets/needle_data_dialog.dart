@@ -201,7 +201,7 @@ class _NeedleDataDialogState extends State<NeedleDataDialog> {
                 Icon(Icons.storage_outlined, color: theme.accent),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text('Steel · app data',
+                  child: Text('Steel · App Data',
                       style: TextStyle(
                           color: theme.text,
                           fontSize: 19,

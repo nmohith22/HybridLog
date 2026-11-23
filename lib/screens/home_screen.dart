@@ -479,7 +479,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         final matches = exercises.where((exercise) =>
             exercise.name != baseName && exercise.name.toLowerCase().contains(query)).toList();
         return AlertDialog(
-          title: const Text('Choose a superset exercise'),
+          title: const Text('Choose a Superset Exercise'),
           content: SizedBox(width: 360, height: MediaQuery.sizeOf(context).height * .34,
             child: Column(children: [
               TextField(decoration: const InputDecoration(labelText: 'Find an exercise'),
@@ -1001,7 +1001,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ),
                   if (selectedTargetMuscles.isNotEmpty || selectedSecondaryMuscles.isNotEmpty) ...[
                     const SizedBox(height: 24),
-                    const Text('Estimated muscle loading', style: TextStyle(fontWeight: FontWeight.w600)),
+                    const Text('Estimated Muscle Loading', style: TextStyle(fontWeight: FontWeight.w600)),
                     Text(MuscleFatigueService.profileSummary(MuscleFatigueService.muscleWeights(
                         nameController.text, selectedTargetMuscles, selectedSecondaryMuscles))),
                     const SizedBox(height: 8),
@@ -1397,7 +1397,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 border: Border.all(color: colors.outlineVariant)),
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Weekly breakdown', style: theme.textTheme.titleLarge),
+                Text('Weekly Breakdown', style: theme.textTheme.titleLarge),
                 const SizedBox(height: 12),
                 Row(children: [
                   Expanded(child: _buildMasterModel(isFront: true)),

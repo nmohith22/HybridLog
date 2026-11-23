@@ -87,7 +87,7 @@ class _YearlyHeatmapCalendarState extends State<YearlyHeatmapCalendar> {
                 label: Text(_currentView == CalendarView.month ? 'Back to Year' : 'Back to Month', style: TextStyle(color: primaryColor)),
               )
             else
-              Text('Running archive', style: Theme.of(context).textTheme.titleLarge),
+              Text('Running Archive', style: Theme.of(context).textTheme.titleLarge),
           ],
         ),
         const SizedBox(height: 16),

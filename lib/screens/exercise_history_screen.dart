@@ -360,8 +360,8 @@ class _ExerciseHistoryScreenState extends State<ExerciseHistoryScreen> {
         return Wrap(spacing: 8, runSpacing: 8, children: [
           for (final stat in [
             ('Workouts', totalWorkouts.toString()),
-            ('Max weight', '${maxWeightEver.toInt()} lbs'),
-            ('Max reps / session', maxRepsInWorkout.toString()),
+            ('Max Weight', '${maxWeightEver.toInt()} lbs'),
+            ('Max Reps / Session', maxRepsInWorkout.toString()),
             ('Estimated 1RM', '${estimated1RM.toInt()} lbs'),
           ]) SizedBox(width: width, child: _metricCard(stat.$1, stat.$2, theme)),
         ]);

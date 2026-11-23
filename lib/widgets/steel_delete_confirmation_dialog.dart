@@ -46,7 +46,7 @@ class _SteelDeleteConfirmationDialogState
         titlePadding: const EdgeInsets.fromLTRB(20, 12, 8, 0),
         title: Row(children: [
           Expanded(
-            child: Text('Confirm deletion',
+            child: Text('Confirm Deletion',
                 style: TextStyle(
                     color: widget.textColor, fontWeight: FontWeight.bold)),
           ),

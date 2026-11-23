@@ -164,7 +164,7 @@ class _NeedleWorkoutDialogState extends State<NeedleWorkoutDialog> {
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: _theme.card,
           title:
-              Text('Equipment profile', style: TextStyle(color: _theme.text)),
+              Text('Equipment Profile', style: TextStyle(color: _theme.text)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
