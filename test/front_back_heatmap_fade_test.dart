@@ -19,15 +19,15 @@ void main() {
     expect(find.byType(AnimatedCrossFade), findsNothing);
     final footprint = tester.getSize(find.byType(FrontBackHeatmapFade));
 
-    await tester.pump(const Duration(seconds: 5));
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 1250));
+    await tester.pump(const Duration(milliseconds: 75));
 
     final fades =
         tester.widgetList<AnimatedOpacity>(find.byType(AnimatedOpacity));
     expect(fades, hasLength(2));
     expect(
         fades.every(
-            (fade) => fade.duration == const Duration(milliseconds: 600)),
+            (fade) => fade.duration == const Duration(milliseconds: 150)),
         isTrue);
     final fadeFinder = find.descendant(
       of: find.byType(FrontBackHeatmapFade),
@@ -38,7 +38,7 @@ void main() {
     expect(transitions.every((fade) => fade.opacity.value > 0), isTrue);
     expect(tester.getSize(find.byType(FrontBackHeatmapFade)), footprint);
 
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 75));
     final completed = tester.widgetList<FadeTransition>(fadeFinder).toList();
     expect(completed.first.opacity.value, 0);
     expect(completed.last.opacity.value, 1);

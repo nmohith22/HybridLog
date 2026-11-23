@@ -175,7 +175,7 @@ class _RunningScreenState extends State<RunningScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   DashboardHeader(
-                    title: 'Running log',
+                    title: 'Running',
                     running: true,
                     onNavigate: widget.onNavigateToWorkout,
                     onSettings: _showSettingsDialog,

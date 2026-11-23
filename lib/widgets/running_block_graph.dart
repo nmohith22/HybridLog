@@ -183,13 +183,9 @@ class _RunningBlockGraphState extends State<RunningBlockGraph> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Expanded(child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Weekly mileage', style: Theme.of(context).textTheme.titleMedium),
-                              Text('${DateFormat.MMMd().format(startOfWeek)} – ${DateFormat.MMMd().format(endOfWeek)}',
-                                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
-                            ],
+                          Expanded(child: Text(
+                            '${DateFormat.MMMd().format(startOfWeek)} – ${DateFormat.MMMd().format(endOfWeek)}',
+                            style: Theme.of(context).textTheme.titleMedium,
                           )),
                           Text('$_totalMiles mi', style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.bold)),
                         ],

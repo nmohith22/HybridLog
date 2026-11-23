@@ -2027,7 +2027,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(children: [
-                Expanded(child: Text('All workouts', style: theme.textTheme.titleLarge)),
+                Expanded(child: Text('All Workouts', style: theme.textTheme.titleLarge)),
                 TextButton.icon(onPressed: _showHistoryYearPicker, icon: const Icon(Icons.expand_more),
                   label: Text('$_selectedHistoryYear')),
               ]),

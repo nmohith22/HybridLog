@@ -17,8 +17,8 @@ class FrontBackHeatmapFade extends StatefulWidget {
 }
 
 class _FrontBackHeatmapFadeState extends State<FrontBackHeatmapFade> {
-  static const _fadeDuration = Duration(milliseconds: 600);
-  static const _faceDuration = Duration(seconds: 5);
+  static const _fadeDuration = Duration(milliseconds: 150);
+  static const _faceDuration = Duration(milliseconds: 1250);
 
   late final Timer _timer;
   bool _showFront = true;
