@@ -18,7 +18,7 @@ Needle3 is bundled with the app and runs on-device on ARM Android devices. Worko
 
 ## Install
 
-Download the latest Android APK: **[Download HybridLog 1.0.16 for Android](https://github.com/nmohith22/HybridLog/releases/download/v1.0.16/HybridLog-1.0.16.apk)** | [All releases](https://github.com/nmohith22/HybridLog/releases).
+Download the latest Android APK: **[Download HybridLog 1.0.17 for Android](https://github.com/nmohith22/HybridLog/releases/download/v1.0.17/HybridLog-1.0.17.apk)** | [All releases](https://github.com/nmohith22/HybridLog/releases).
 
 ## Build
 
