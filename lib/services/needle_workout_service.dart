@@ -299,22 +299,25 @@ class NeedleWorkoutService {
     return null;
   }
 
-  static String? dataRecordType(String request) {
-    final noun = RegExp(
-      r'\b(folders?|exercises?|workouts?|runs?|running)\b',
-      caseSensitive: false,
-    ).firstMatch(request)?.group(1)?.toLowerCase();
-    return switch (noun) {
-      'folders' => 'folder',
-      'exercises' => 'exercise',
-      'workouts' => 'workout',
-      'runs' || 'running' => 'run',
-      _ => noun,
-    };
-  }
+  static final _recordTerms = RegExp(
+    r'\b(folders?|exercises?|work[ -]?outs?|runs?|ran|running|strength training|weight ?lifting|weight training|weights|lifting|muscle[ -]building)\b',
+    caseSensitive: false,
+  );
+
+  static Iterable<String> dataRecordTypes(String request) =>
+      _recordTerms.allMatches(request).map((match) {
+        final term = match.group(0)!.toLowerCase();
+        if (term.startsWith('folder')) return 'folder';
+        if (term.startsWith('exercise')) return 'exercise';
+        if (term.startsWith('run') || term == 'ran') return 'run';
+        return 'workout';
+      });
+
+  static String? dataRecordType(String request) =>
+      dataRecordTypes(request).firstOrNull;
 
   static bool isDataRead(String request) => RegExp(
-        r"^(?:(?:please|can you|could you|would you)\s+)*(show|find|list|read|look up|pull up|what is in|what['’]s in|how far did i run)\b",
+        r"^(?:(?:please|can you|could you|would you)\s+)*(show|find|list|read|look up|pull up|what is in|what['’]s in|what (?:was|were) my|how (?:far|many miles) did i run)\b",
         caseSensitive: false,
       ).hasMatch(request);
 
@@ -346,7 +349,7 @@ class NeedleWorkoutService {
           RegExp(r'\b(last|latest|most recent)\b', caseSensitive: false)
               .hasMatch(request);
       final listing = RegExp(
-        r"\b(folders|exercises|workouts|runs|library|run log)\s*[?.!]*$",
+        r"\b(folders|exercises|work[ -]?outs|runs|library|running log|run log|workout log|strength training|weight ?lifting|weight training)\s*[?.!]*$",
         caseSensitive: false,
       ).hasMatch(request);
       var matches = named;

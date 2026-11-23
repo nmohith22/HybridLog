@@ -145,18 +145,29 @@ void main() {
         contains('3 mi'));
     await apply('Change my run from yesterday to 4 miles.', 'update');
     expect((await db.runningLogs.where().findFirst())!.miles, 4);
-    await apply('Delete my run from yesterday.', 'delete');
-    expect(await db.runningLogs.count(), 0);
 
     await apply('Log a workout yesterday: Cable Fly, 25 pounds, 10 and 8 reps.',
         'create');
-    expect((await SteelChatService.ask('Show yesterday’s workout.')).text,
-        contains('25 lbs x 10 reps, 25 lbs x 8 reps'));
+    final run =
+        await SteelChatService.ask('How many miles did I run yesterday?');
+    expect(run.text, allOf(contains('4 mi'), isNot(contains('Cable Fly'))));
+    final workout =
+        await SteelChatService.ask('What was my workout yesterday?');
+    expect(
+        workout.text,
+        allOf(contains('25 lbs x 10 reps, 25 lbs x 8 reps'),
+            isNot(contains('4 mi'))));
+    final strength =
+        await SteelChatService.ask('Show yesterday’s weight training.');
+    expect(strength.text, workout.text);
     await apply('Move my workout from yesterday to today.', 'update');
     expect((await SteelChatService.ask('Show today’s workout.')).text,
         contains('Cable Fly'));
     await apply('Delete my workout from today.', 'delete');
     expect(await db.dailyWorkouts.count(), 0);
+    expect((await db.runningLogs.where().findFirst())!.miles, 4);
+    await apply('Delete my run from yesterday.', 'delete');
+    expect(await db.runningLogs.count(), 0);
 
     await apply(
         'Rename the Cable Fly exercise to Standing Cable Fly.', 'update');

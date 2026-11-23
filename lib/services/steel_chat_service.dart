@@ -91,6 +91,9 @@ class SteelChatService {
   }) {
     final terms = _terms(question);
     final query = _normalize(question);
+    final activities = NeedleWorkoutService.dataRecordTypes(question)
+        .where((type) => type == 'run' || type == 'workout')
+        .toSet();
     final wantsRecent = _words(question).any(_recentWords.contains);
     final thisWeek =
         RegExp(r'\b(this week|current week)\b', caseSensitive: false)
@@ -101,8 +104,14 @@ class SteelChatService {
     final ranked = <({SteelLocalDocument document, double score})>[];
 
     for (final document in documents) {
+      final isActivity = document.kind == 'workout' || document.kind == 'run';
+      if (isActivity &&
+          activities.isNotEmpty &&
+          !activities.contains(document.kind)) {
+        continue;
+      }
       if (thisWeek &&
-          (document.kind == 'workout' || document.kind == 'run') &&
+          isActivity &&
           (document.date == null || document.date!.isBefore(weekStart))) {
         continue;
       }
@@ -113,8 +122,7 @@ class SteelChatService {
         if (documentTerms.contains(term)) score += 1;
       }
       if (query.length >= 4 && searchable.contains(query)) score += 3;
-      if (wantsRecent &&
-          (document.kind == 'workout' || document.kind == 'run')) {
+      if (isActivity && (wantsRecent || activities.contains(document.kind))) {
         score += 0.5;
       }
       if (score > 0) ranked.add((document: document, score: score));

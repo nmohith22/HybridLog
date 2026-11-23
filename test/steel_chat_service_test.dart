@@ -84,4 +84,42 @@ void main() {
     expect(draft.sets.map((set) => (set.weight, set.reps)),
         [(135.0, 10), (135.0, 9)]);
   });
+
+  test('chat evidence keeps running and strength workouts separate', () {
+    final records = [
+      SteelLocalDocument(
+        kind: 'run',
+        label: 'Morning run',
+        date: DateTime(2026, 11, 2),
+        searchableText: '3 miles',
+        evidence: const {'miles': 3},
+      ),
+      SteelLocalDocument(
+        kind: 'workout',
+        label: 'Strength workout',
+        date: DateTime(2026, 11, 2),
+        searchableText: 'Bench press',
+        evidence: const {'exercise': 'Bench press'},
+      ),
+    ];
+
+    for (final (question, kind) in [
+      ('Tell me about my last run', 'run'),
+      ('When did I last run?', 'run'),
+      ('When I ran last, how far did I go?', 'run'),
+      ('Tell me about my last workout', 'workout'),
+      ('What was my last weight training session?', 'workout'),
+    ]) {
+      expect(
+        SteelChatService.rankDocuments(question, records).map((r) => r.kind),
+        [kind],
+        reason: question,
+      );
+    }
+    expect(
+      SteelChatService.rankDocuments(
+          'Compare my last run and workout', records),
+      hasLength(2),
+    );
+  });
 }
