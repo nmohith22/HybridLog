@@ -13,6 +13,7 @@ on:
       - "evals/**"
       - "tool/**"
       - "android/app/src/main/cpp/**"
+      - "android/app/src/main/kotlin/**"
       - "pubspec.yaml"
       - "pubspec.lock"
       - ".github/workflows/release-apk.yml"
@@ -37,6 +38,14 @@ jobs:
           cache: true
       - name: Resolve Flutter packages
         run: flutter pub get
+      - name: Fetch pinned Needle runtime for offline CRUD QA
+        run: |
+          needle="$RUNNER_TEMP/needle"
+          curl --fail --silent --show-error --location --retry 3 \
+            'https://huggingface.co/Cactus-Compute/needle3/resolve/d6c7d6a2e9655505e0f8e23339356dd1705900eb/linux-x86_64/needle' -o "$needle"
+          echo "77cd35ee75c53df8532b397e11ed7cf94a45d89a9f14f50881fd9c68ba54a2d0  $needle" | sha256sum -c
+          chmod +x "$needle"
+          echo "HYBRIDLOG_NEEDLE_QA=$needle" >> "$GITHUB_ENV"
       - name: Run Flutter unit and widget tests
         env:
           TZ: America/Chicago

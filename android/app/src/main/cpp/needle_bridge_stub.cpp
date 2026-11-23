@@ -6,7 +6,7 @@ Java_com_example_workout_1app_MainActivity_nativeInitialize(JNIEnv* env, jobject
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_example_workout_1app_MainActivity_nativeComplete(JNIEnv* env, jobject, jstring) {
+Java_com_example_workout_1app_MainActivity_nativeComplete(JNIEnv* env, jobject, jstring, jstring) {
     return env->NewStringUTF("Needle3 workout planning requires an ARM Android device.");
 }
 

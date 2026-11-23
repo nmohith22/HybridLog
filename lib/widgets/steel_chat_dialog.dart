@@ -85,16 +85,16 @@ class _SteelChatDialogState extends State<SteelChatDialog> {
     });
     _scrollToEnd();
     try {
-      await NeedleWorkoutService.ensureReady(onProgress: (loaded, total) {
-        if (mounted)
-          setState(() {
-            _loaded = loaded;
-            _total = total;
-          });
-      });
       final reply = await SteelChatService.ask(
         request,
         sessionHistory: List.unmodifiable(_history),
+        onProgress: (loaded, total) {
+          if (mounted)
+            setState(() {
+              _loaded = loaded;
+              _total = total;
+            });
+        },
       );
       if (!mounted) return;
       setState(() {
@@ -177,20 +177,19 @@ class _SteelChatDialogState extends State<SteelChatDialog> {
           : 'I can only apply a change you clearly asked me to make.');
       return;
     }
-    if (action.operation == 'delete') {
-      final approved = await SteelDeleteConfirmationDialog.show(
-        context,
-        summary: action.summary,
-        cardColor: _theme.card,
-        textColor: _theme.text,
-        secondaryTextColor: _theme.subText,
-      );
-      if (approved != true) return;
-    }
     setState(() => _working = true);
     try {
+      if (action.operation == 'delete') {
+        final approved = await SteelDeleteConfirmationDialog.show(
+          context,
+          summary: action.summary,
+          cardColor: _theme.card,
+          textColor: _theme.text,
+          secondaryTextColor: _theme.subText,
+        );
+        if (approved != true || !mounted) return;
+      }
       await NeedleWorkoutService.applyApprovedDataAction(action);
-      widget.onDataChanged();
       if (!mounted) return;
       setState(() {
         message.text = switch (action.operation) {
@@ -201,10 +200,12 @@ class _SteelChatDialogState extends State<SteelChatDialog> {
         };
         message.reply = null;
       });
-    } catch (_) {
+      widget.onDataChanged();
+    } catch (error) {
       if (mounted)
-        setState(() => message.text =
-            'I couldn’t confirm that change finished. Check the record before trying again.');
+        setState(() => message.text = error is FormatException
+            ? error.message
+            : 'I couldn’t confirm that change finished. Check the record before trying again.');
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -421,7 +422,9 @@ class _SteelChatDialogState extends State<SteelChatDialog> {
                     backgroundColor: theme.accent,
                     foregroundColor: theme.background),
                 icon: const Icon(Icons.check, size: 17),
-                label: const Text('Approve change'),
+                label: Text(action.operation == 'delete'
+                    ? 'Review deletion'
+                    : 'Approve change'),
               ),
             ],
           ],

@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../services/needle_workout_service.dart';
-import '../services/steel_guardrails.dart';
 import '../services/theme_service.dart';
 import 'steel_delete_confirmation_dialog.dart';
 
@@ -64,23 +63,7 @@ class _NeedleDataDialogState extends State<NeedleDataDialog> {
       _error = false;
     });
     try {
-      await NeedleWorkoutService.ensureReady(onProgress: (_, __) {});
-      await NeedleWorkoutService.resetConversation();
-      final action = await NeedleWorkoutService.proposeDataAction(
-        request,
-        sessionHistory: List<Map<String, String>>.unmodifiable(_sessionHistory),
-      );
-      if (action.operation == 'delete' &&
-          SteelGuardrails.isBulkDeleteRequest(request)) {
-        throw const FormatException(
-          'Steel can delete one item at a time. Please name one record.',
-        );
-      }
-      if (!SteelGuardrails.allowsOperation(request, action.operation)) {
-        throw const FormatException(
-          'Needle proposed an operation that was not explicit in your request. Please rephrase it.',
-        );
-      }
+      final action = await NeedleWorkoutService.proposeDataAction(request);
       if (!mounted) return;
       _rememberExchange(
         request,
@@ -108,6 +91,7 @@ class _NeedleDataDialogState extends State<NeedleDataDialog> {
   }
 
   String _friendlyError(Object error, {bool applying = false}) {
+    if (error is FormatException) return error.message;
     final detail = error.toString().toLowerCase();
     if (detail.contains('already exists')) {
       return 'There’s already an item with that name. Try a different name.';
@@ -155,15 +139,10 @@ class _NeedleDataDialogState extends State<NeedleDataDialog> {
   Future<void> _approve() async {
     final action = _action;
     if (action == null || action.operation == 'read' || _working) return;
-    if (action.operation == 'delete' && !await _confirmDelete(action.summary)) {
-      return;
-    }
-
-    setState(() {
-      _working = true;
-      _message = null;
-    });
+    setState(() => _working = true);
     try {
+      if (action.operation == 'delete' &&
+          (!await _confirmDelete(action.summary) || !mounted)) return;
       await NeedleWorkoutService.applyApprovedDataAction(action);
       widget.onChanged?.call();
       if (!mounted) return;

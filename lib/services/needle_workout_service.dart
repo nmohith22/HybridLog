@@ -3,11 +3,14 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:isar/isar.dart';
+import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/fitness_schema.dart';
+import '../utils/weight_reps_format.dart';
 import 'database_service.dart';
 import 'equipment_profile_service.dart';
+import 'steel_guardrails.dart';
 import 'widget_service.dart';
 
 class NeedleDataAction {
@@ -105,9 +108,13 @@ class NeedleWorkoutService {
     ],
   };
 
-  static Future<bool> get isSupported async =>
-      Platform.isAndroid &&
-      await _channel.invokeMethod<bool>('isSupported') == true;
+  static Future<bool> get isSupported async {
+    try {
+      return await _channel.invokeMethod<bool>('isSupported') == true;
+    } on MissingPluginException {
+      return false;
+    }
+  }
 
   static Future<void> ensureReady(
       {required void Function(int received, int total) onProgress}) async {
@@ -145,8 +152,12 @@ class NeedleWorkoutService {
   static Future<void> resetConversation() =>
       _channel.invokeMethod<void>('reset');
 
-  static Future<String> completeLocally(String input) async =>
-      await _channel.invokeMethod<String>('complete', {'input': input}) ?? '';
+  static Future<String> completeLocally(String input, {String? tools}) async =>
+      await _channel.invokeMethod<String>('complete', {
+        'input': input,
+        if (tools != null) 'tools': tools,
+      }) ??
+      '';
 
   static Future<WorkoutLogDraft> parseWorkoutLog(
     String userText,
@@ -288,95 +299,461 @@ class NeedleWorkoutService {
     return null;
   }
 
-  static Future<NeedleDataAction> proposeDataAction(
-    String userRequest, {
-    List<Map<String, String>> sessionHistory = const [],
-  }) async {
-    final db = await DatabaseService().database;
-    final exercises = await db.exercises.where().sortByName().findAll();
-    final folders = await db.workoutFolders.where().sortByName().findAll();
-    final workouts = await db.dailyWorkouts.where().sortByDateDesc().findAll();
-    final runs = await db.runningLogs.where().sortByDateDesc().findAll();
-    final request = jsonEncode({
-      'user_request': userRequest,
-      'session_history': sessionHistory,
-      'record_shapes': {
-        'exercise': {
-          'name': 'text',
-          'target_muscle': 'text',
-          'target_muscles': ['text'],
-          'secondary_muscles': ['text'],
-          'is_favorite': 'boolean',
-          'folder_names': ['text'],
-        },
-        'folder': {'name': 'text'},
-        'workout': {
-          'date': 'ISO-8601 date',
-          'exercises': [
-            {
-              'name': 'exercise name',
-              'target_muscle': 'text',
-              'target_muscles': ['text'],
-              'secondary_muscles': ['text'],
-              'sets': [
-                {
-                  'reps': 'integer',
-                  'weight': 'number',
-                  'rest_pause_seconds': 'integer or null',
-                  'sub_sets': [
-                    {'reps': 'integer', 'weight': 'number'}
-                  ],
-                }
-              ],
-            }
-          ],
-        },
-        'run': {'date': 'ISO-8601 date', 'miles': 'integer'},
-      },
-      'local_data_snapshot': {
-        'exercises': exercises
-            .map((item) => {
-                  'id': item.id,
-                  'name': item.name,
-                  'target_muscle': item.targetMuscle,
-                  'target_muscles': item.targetMuscles,
-                  'secondary_muscles': item.secondaryMuscles,
-                  'is_favorite': item.isFavorite,
-                  'folder_names': item.folderNames,
-                })
-            .toList(),
-        'folders':
-            folders.map((item) => {'id': item.id, 'name': item.name}).toList(),
-        'recent_workouts': workouts
-            .take(40)
-            .map((item) => {
-                  'id': item.id,
-                  'date': item.date.toIso8601String(),
-                  'exercises': item.exercises
-                      .map((exercise) => exercise.exerciseName)
-                      .whereType<String>()
-                      .toList(),
-                })
-            .toList(),
-        'recent_runs': runs
-            .take(40)
-            .map((item) => {
-                  'id': item.id,
-                  'date': item.date.toIso8601String(),
-                  'miles': item.miles,
-                })
-            .toList(),
-      },
-    });
-    final raw =
-        await _channel.invokeMethod<String>('complete', {'input': request});
-    final action = _parseDataAction(raw ?? '');
-    return _verifyDataAction(db, action);
+  static String? dataRecordType(String request) {
+    final noun = RegExp(
+      r'\b(folders?|exercises?|workouts?|runs?|running)\b',
+      caseSensitive: false,
+    ).firstMatch(request)?.group(1)?.toLowerCase();
+    return switch (noun) {
+      'folders' => 'folder',
+      'exercises' => 'exercise',
+      'workouts' => 'workout',
+      'runs' || 'running' => 'run',
+      _ => noun,
+    };
   }
 
-  static Future<NeedleDataAction> validateProposedDataAction(String raw) async {
+  static bool isDataRead(String request) => RegExp(
+        r"^(?:(?:please|can you|could you|would you)\s+)*(show|find|list|read|look up|pull up|what is in|what['’]s in|how far did i run)\b",
+        caseSensitive: false,
+      ).hasMatch(request);
+
+  static Future<NeedleDataAction> proposeDataAction(
+    String request, {
+    void Function(int, int)? onProgress,
+  }) async {
+    final type = dataRecordType(request);
+    if (type == null) {
+      throw const FormatException(
+          'Name the exercise, folder, workout, or run you want me to look at.');
+    }
+    final operation = SteelGuardrails.requestedMutation(request);
     final db = await DatabaseService().database;
-    return _verifyDataAction(db, _parseDataAction(raw));
+    if (operation == null) {
+      if (!isDataRead(request)) {
+        throw const FormatException(
+            'Ask me to show a record or describe one change you want to make.');
+      }
+      final rows = await _dataTargets(db, type);
+      final datePhrase = RegExp(
+        r'\b(today|yesterday|\d{4}-\d{2}-\d{2}|(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?) \d{1,2}(?:,? \d{4})?)\b',
+        caseSensitive: false,
+      ).firstMatch(request)?.group(0);
+      final date = datePhrase == null ? null : _requestedDate(datePhrase);
+      final named = rows
+          .where((row) => row.name.isNotEmpty && _phraseIn(request, row.name));
+      final latest =
+          RegExp(r'\b(last|latest|most recent)\b', caseSensitive: false)
+              .hasMatch(request);
+      final listing = RegExp(
+        r"\b(folders|exercises|workouts|runs|library|run log)\s*[?.!]*$",
+        caseSensitive: false,
+      ).hasMatch(request);
+      var matches = named;
+      if (type == 'run' || type == 'workout') {
+        final exerciseNames = type == 'workout'
+            ? (await db.exercises.where().findAll())
+                .map((exercise) => exercise.name)
+                .where((name) => _phraseIn(request, name))
+                .toList()
+            : <String>[];
+        if (date != null || latest || listing || exerciseNames.isNotEmpty) {
+          matches = rows.where((row) =>
+              (date == null || _dateLabel(row.date!) == _dateLabel(date)) &&
+              (exerciseNames.isEmpty ||
+                  exerciseNames.any((name) => _phraseIn(row.label, name))));
+          if (latest) matches = matches.take(1);
+        }
+      } else if (named.isEmpty && listing) {
+        matches = rows;
+      }
+      final labels = matches.map((row) => row.label).take(8).join('\n');
+      return NeedleDataAction(
+        operation: 'read',
+        recordType: type,
+        recordId: null,
+        record: const {},
+        summary: labels.isEmpty
+            ? 'I found no matching ${type}s in your logs or library.'
+            : labels,
+      );
+    }
+    if (!SteelGuardrails.allowsOperation(request, operation)) {
+      throw const FormatException(
+          'I can delete one item at a time. Please name one record.');
+    }
+
+    final renaming = operation == 'update' &&
+        (type == 'folder' ||
+            type == 'exercise' &&
+                RegExp(r'\brename\b', caseSensitive: false).hasMatch(request));
+    final (tool, schema) = _dataTool(operation, type, renaming: renaming);
+    await ensureReady(onProgress: onProgress ?? (_, __) {});
+    final raw = await completeLocally(request, tools: schema);
+    final fields = _readDataFields(raw, tool, schema);
+    if (fields == null) {
+      throw FormatException(switch ((operation, type)) {
+        ('create', 'exercise') =>
+          'What is the new exercise name and its main muscle?',
+        ('create', 'workout') =>
+          'Give me an exercise name, the weight in pounds and reps per set, and the workout date.',
+        ('create', 'run') => 'What date and how many whole miles should I log?',
+        ('create', _) => 'What should I name the new folder?',
+        ('update', 'folder') =>
+          'Give me the current folder name and its new name.',
+        _ =>
+          'Which $type should I $operation? Give its exact name or date and any new values.',
+      });
+    }
+
+    var target = fields.remove('target');
+    final separator = RegExp(r'\s+to\s+', caseSensitive: false)
+        .allMatches(request)
+        .lastOrNull;
+    if (renaming &&
+        separator != null &&
+        target is String &&
+        fields['name'] is String) {
+      final before = request.substring(0, separator.start);
+      final after = request.substring(separator.end);
+      final name = fields['name'] as String;
+      if (!_phraseIn(before, target) || !_phraseIn(after, name)) {
+        if (_phraseIn(before, name) && _phraseIn(after, target)) {
+          fields['name'] = target;
+          target = name;
+        } else {
+          throw const FormatException(
+              'Give me the current name followed by the new name.');
+        }
+      }
+    }
+    int? id;
+    if (operation != 'create') {
+      final targets = await _dataTargets(db, type);
+      final selector = target is String ? target.trim() : '';
+      if (selector.isEmpty || !_phraseIn(request, selector)) {
+        throw FormatException(
+            'Which $type do you mean? Give its exact name or date.');
+      }
+      var matching = targets.where((row) {
+        if (row.date == null)
+          return row.name.toLowerCase() == selector.toLowerCase();
+        final date = _requestedDate(selector.replaceFirst(
+            RegExp(r'^(from|on|for)\s+', caseSensitive: false), ''));
+        return date != null && _dateLabel(row.date!) == _dateLabel(date);
+      }).toList();
+      if (matching.isEmpty && (type == 'exercise' || type == 'folder')) {
+        final name = selector
+            .replaceFirst(RegExp(r'^(the|my)\s+', caseSensitive: false), '')
+            .replaceFirst(RegExp('\\s+$type\$', caseSensitive: false), '');
+        matching = targets
+            .where((row) => row.name.toLowerCase() == name.toLowerCase())
+            .toList();
+      }
+      if (matching.length != 1) {
+        throw FormatException(
+            'I need one matching $type. Check its exact name or date.');
+      }
+      id = matching.single.id;
+    }
+    if (fields['name'] case final String name when !_phraseIn(request, name)) {
+      throw const FormatException('Please give the exact name to use.');
+    }
+    if (fields['date'] case final String phrase) {
+      final date = _requestedDate(phrase);
+      if (date == null || !_phraseIn(request, phrase)) {
+        throw const FormatException(
+            'Please give a date, such as yesterday or 2026-11-18.');
+      }
+      fields['date'] = _dateLabel(date);
+    }
+    if (fields['target_muscle'] case final String muscle) {
+      if (!_phraseIn(request, muscle)) {
+        throw const FormatException('Please name the primary muscle.');
+      }
+      fields['target_muscle'] = muscle.toLowerCase().replaceAll(' ', '_');
+    }
+    if (type == 'workout' && fields.containsKey('name')) {
+      final name = _recordString(fields, 'name');
+      final exercise = await db.exercises
+          .filter()
+          .nameEqualTo(name, caseSensitive: false)
+          .findFirst();
+      if (exercise == null) {
+        throw const FormatException('Choose an exercise from your library.');
+      }
+      final weight = fields.remove('weight');
+      final reps = fields.remove('reps');
+      final draft = parseWorkoutLogResponse(
+          jsonEncode({
+            'exercise_name': exercise.name,
+            'sets': [
+              if (reps is List)
+                for (final count in reps) {'weight': weight, 'reps': count},
+            ],
+          }),
+          [exercise]);
+      fields.remove('name');
+      fields['exercises'] = [
+        {
+          'name': exercise.name,
+          'target_muscle': exercise.targetMuscle,
+          'target_muscles': exercise.targetMuscles,
+          'secondary_muscles': exercise.secondaryMuscles,
+          'sets': [
+            for (final set in draft.sets)
+              {'weight': set.weight, 'reps': set.reps},
+          ],
+        }
+      ];
+    }
+    if (operation != 'delete' && fields.isEmpty) {
+      throw const FormatException('Tell me what value you want to change.');
+    }
+    return _verifyDataAction(
+        db,
+        NeedleDataAction(
+          operation: operation,
+          recordType: type,
+          recordId: id,
+          record: Map.unmodifiable(fields),
+          summary: '',
+        ));
+  }
+
+  static (String, String) _dataTool(String operation, String type,
+      {required bool renaming}) {
+    final verb = switch ((operation, type)) {
+      ('create', 'exercise') => 'add',
+      ('create', 'run' || 'workout') => 'log',
+      ('update', _) when renaming => 'rename',
+      ('update', _) => 'edit',
+      _ => operation,
+    };
+    final tool = '${verb}_$type';
+    final dated = type == 'workout' || type == 'run';
+    final props = <String, Map<String, Object>>{};
+    final required = <String>[];
+    void field(String key, String description,
+        {String kind = 'string', bool needed = true}) {
+      props[key] = {
+        'type': kind,
+        'description': description,
+        if (kind == 'array') 'items': {'type': 'integer'},
+      };
+      if (needed) required.add(key);
+    }
+
+    if (operation != 'create') {
+      field(
+          'target',
+          dated
+              ? 'Copy the original date phrase verbatim'
+              : 'Exact name of the existing $type');
+    }
+    if (operation != 'delete') {
+      if (dated) {
+        field('date',
+            'Copy the ${operation == 'update' ? 'new ' : ''}date phrase verbatim',
+            needed: operation == 'create');
+      }
+      if (!dated || type == 'workout' && operation == 'create') {
+        field(
+            'name',
+            type == 'workout'
+                ? 'Exercise name from the user'
+                : 'Exact ${operation == 'update' ? 'new ' : ''}$type name',
+            needed: renaming || operation == 'create');
+      }
+      if (type == 'exercise' && !renaming) {
+        field('target_muscle', 'Primary muscle explicitly named by the user',
+            needed: operation == 'create');
+      }
+      if (type == 'run') {
+        field('miles', 'Logged mileage in whole miles',
+            kind: 'integer', needed: operation == 'create');
+      }
+      if (type == 'workout' && operation == 'create') {
+        field('weight',
+            'Weight per set in pounds. Zero only for explicit bodyweight.',
+            kind: 'number');
+        field('reps', 'Reps for each set, repeating the count once per set',
+            kind: 'array');
+      }
+    }
+    final description = switch (tool) {
+      'rename_folder' => 'Rename an existing favorites folder to a new name.',
+      'create_folder' => 'Create or make a favorites folder with a name.',
+      'add_exercise' => 'Create or add an exercise to the exercise library.',
+      'rename_exercise' => 'Rename an existing exercise to a new name.',
+      'edit_exercise' =>
+        'Update or rename an exercise or change its primary muscle.',
+      'log_run' => 'Record or add a run with its date and mileage.',
+      'edit_run' =>
+        'Update, correct or change the mileage or date of an existing run.',
+      'log_workout' =>
+        'Log one exercise performed at one weight, with the reps for each set.',
+      'edit_workout' => 'Move an existing logged workout to a new date.',
+      _ => 'Delete or remove one existing $type.',
+    };
+    return (
+      tool,
+      jsonEncode([
+        {
+          'type': 'function',
+          'function': {
+            'name': tool,
+            'description': description,
+            'parameters': {
+              'type': 'object',
+              'properties': props,
+              'required': required
+            },
+          },
+        }
+      ])
+    );
+  }
+
+  static Map<String, dynamic>? _readDataFields(
+      String raw, String tool, String schema) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map || decoded['success'] == false) return null;
+      var calls = decoded['function_calls'];
+      final validation = decoded['validation'];
+      // A fully grounded low-confidence extraction may be reviewed. Neither
+      // suppressed nor accepted calls can write anything on their own.
+      if (calls is List &&
+          calls.isEmpty &&
+          validation is Map &&
+          validation['negation'] == false &&
+          validation['ungrounded'] is List &&
+          (validation['ungrounded'] as List).isEmpty) {
+        calls = decoded['suppressed_calls'];
+      }
+      if (calls is! List || calls.length != 1) return null;
+      final call = calls.single;
+      if (call is! Map || call['name'] != tool) return null;
+      final args = call['arguments'];
+      final fields = args is String ? jsonDecode(args) : args;
+      final parameters = jsonDecode(schema)[0]['function']['parameters'] as Map;
+      final properties = parameters['properties'] as Map;
+      if (fields is! Map<String, dynamic> ||
+          !fields.keys.every(properties.containsKey) ||
+          !(parameters['required'] as List).every(fields.containsKey))
+        return null;
+      for (final entry in fields.entries) {
+        final value = entry.value;
+        final valid = switch (properties[entry.key]['type']) {
+          'string' =>
+            value is String && value.trim().isNotEmpty && value.length <= 300,
+          'integer' => value is int,
+          'number' => value is num && value.isFinite,
+          'array' =>
+            value is List && value.length <= 20 && value.every((v) => v is int),
+          _ => false,
+        };
+        if (!valid) return null;
+      }
+      return Map.of(fields);
+    } on FormatException {
+      return null;
+    }
+  }
+
+  static Future<List<({int id, String name, DateTime? date, String label})>>
+      _dataTargets(
+    Isar db,
+    String type,
+  ) async {
+    switch (type) {
+      case 'folder':
+        final folders = await db.workoutFolders.where().sortByName().findAll();
+        final exercises = await db.exercises.where().sortByName().findAll();
+        return folders.map((folder) {
+          final names = exercises
+              .where((e) =>
+                  e.folderNames.contains(folder.name) ||
+                  e.folderName == folder.name)
+              .map((e) => e.name)
+              .join(', ');
+          return (
+            id: folder.id,
+            name: folder.name,
+            date: null,
+            label: '${folder.name}: ${names.isEmpty ? 'empty' : names}'
+          );
+        }).toList();
+      case 'exercise':
+        return [
+          for (final item in await db.exercises.where().sortByName().findAll())
+            (
+              id: item.id,
+              name: item.name,
+              date: null,
+              label: '${item.name}: ${item.targetMuscle.replaceAll('_', ' ')}'
+            ),
+        ];
+      case 'run':
+        return [
+          for (final item
+              in await db.runningLogs.where().sortByDateDesc().findAll())
+            (
+              id: item.id,
+              name: '',
+              date: item.date,
+              label: '${_dateLabel(item.date)}: ${item.miles} mi'
+            ),
+        ];
+      default:
+        return [
+          for (final item
+              in await db.dailyWorkouts.where().sortByDateDesc().findAll())
+            (
+              id: item.id,
+              name: '',
+              date: item.date,
+              label: '${_dateLabel(item.date)}: ${_workoutDetails(item)}'
+            ),
+        ];
+    }
+  }
+
+  static String _workoutDetails(DailyWorkout item) => item.exercises
+      .map((ex) =>
+          '${ex.exerciseName}: ${ex.sets.map((s) => formatWeightReps(s.weight, s.reps)).join(', ')}')
+      .join(' | ');
+
+  static bool _phraseIn(String text, String phrase) => RegExp(
+        r'(?<![\p{L}\p{N}])' +
+            RegExp.escape(phrase.trim()) +
+            r'(?![\p{L}\p{N}])',
+        caseSensitive: false,
+        unicode: true,
+      ).hasMatch(text);
+
+  static DateTime? _requestedDate(String phrase) {
+    final now = DateTime.now();
+    final value = phrase.trim().toLowerCase().replaceAll(',', '');
+    if (value == 'today' || value == 'yesterday') {
+      return DateTime(
+          now.year, now.month, now.day - (value == 'yesterday' ? 1 : 0));
+    }
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value)) {
+      final parsed = DateTime.tryParse(value);
+      return parsed != null && _dateLabel(parsed) == value ? parsed : null;
+    }
+    final capitalized =
+        value.isEmpty ? '' : value[0].toUpperCase() + value.substring(1);
+    final withYear = RegExp(r'\d{4}$').hasMatch(value)
+        ? capitalized
+        : '$capitalized ${now.year}';
+    for (final format in ['MMMM d yyyy', 'MMM d yyyy']) {
+      final date = DateFormat(format, 'en_US').tryParseStrict(withYear);
+      if (date != null) return date;
+    }
+    return null;
   }
 
   static Future<void> applyApprovedDataAction(NeedleDataAction action) async {
@@ -385,13 +762,18 @@ class NeedleWorkoutService {
     }
     final db = await DatabaseService().database;
     await db.writeTxn(() async {
+      final current = await _verifyDataAction(db, action);
+      if (current.summary != action.summary) {
+        throw const FormatException(
+            'That record changed. Ask Steel for a new preview.');
+      }
       switch (action.recordType) {
         case 'exercise':
           if (action.operation == 'create') {
             final exercise = _exerciseFrom(action.record);
             if (await db.exercises
                     .filter()
-                    .nameEqualTo(exercise.name)
+                    .nameEqualTo(exercise.name, caseSensitive: false)
                     .findFirst() !=
                 null) {
               throw StateError(
@@ -409,7 +791,7 @@ class NeedleWorkoutService {
             final updated = _exerciseFrom(action.record, existing: existing);
             final duplicate = await db.exercises
                 .filter()
-                .nameEqualTo(updated.name)
+                .nameEqualTo(updated.name, caseSensitive: false)
                 .findFirst();
             if (duplicate != null && duplicate.id != existing.id) {
               throw StateError(
@@ -422,7 +804,7 @@ class NeedleWorkoutService {
             final name = _recordString(action.record, 'name');
             if (await db.workoutFolders
                     .filter()
-                    .nameEqualTo(name)
+                    .nameEqualTo(name, caseSensitive: false)
                     .findFirst() !=
                 null) {
               throw StateError('A folder named "$name" already exists.');
@@ -437,7 +819,8 @@ class NeedleWorkoutService {
             await db.workoutFolders.delete(folder.id);
             final exercises = await db.exercises.where().findAll();
             for (final exercise in exercises) {
-              if (!exercise.folderNames.contains(folder.name)) continue;
+              if (!exercise.folderNames.contains(folder.name) &&
+                  exercise.folderName != folder.name) continue;
               exercise.folderNames = List.of(exercise.folderNames)
                 ..remove(folder.name);
               exercise.folderName = exercise.folderNames.firstOrNull;
@@ -446,8 +829,10 @@ class NeedleWorkoutService {
             }
           } else {
             final name = _recordString(action.record, 'name');
-            final duplicate =
-                await db.workoutFolders.filter().nameEqualTo(name).findFirst();
+            final duplicate = await db.workoutFolders
+                .filter()
+                .nameEqualTo(name, caseSensitive: false)
+                .findFirst();
             if (duplicate != null && duplicate.id != folder.id) {
               throw StateError('A folder named "$name" already exists.');
             }
@@ -457,10 +842,13 @@ class NeedleWorkoutService {
             if (oldName != name) {
               final exercises = await db.exercises.where().findAll();
               for (final exercise in exercises) {
-                if (!exercise.folderNames.contains(oldName)) continue;
-                exercise.folderNames = exercise.folderNames
-                    .map((item) => item == oldName ? name : item)
-                    .toList();
+                if (!exercise.folderNames.contains(oldName) &&
+                    exercise.folderName != oldName) continue;
+                final names = exercise.folderNames.isEmpty
+                    ? [oldName]
+                    : exercise.folderNames;
+                exercise.folderNames =
+                    names.map((item) => item == oldName ? name : item).toList();
                 exercise.folderName = exercise.folderNames.firstOrNull;
                 await db.exercises.put(exercise);
               }
@@ -468,7 +856,23 @@ class NeedleWorkoutService {
           }
         case 'workout':
           if (action.operation == 'create') {
-            await db.dailyWorkouts.put(_workoutFrom(action.record));
+            final draft = _workoutFrom(action.record);
+            final days = await db.dailyWorkouts
+                .filter()
+                .dateBetween(
+                  draft.date,
+                  _nextDay(draft.date),
+                  includeUpper: false,
+                )
+                .findAll();
+            if (days.length > 1)
+              throw const FormatException(
+                  'This date has more than one workout. Choose one in workout history.');
+            final existing = days.firstOrNull;
+            if (existing != null) {
+              existing.exercises = [...existing.exercises, ...draft.exercises];
+            }
+            await db.dailyWorkouts.put(existing ?? draft);
             return;
           }
           final workout = await db.dailyWorkouts.get(_requiredId(action));
@@ -477,12 +881,30 @@ class NeedleWorkoutService {
           if (action.operation == 'delete') {
             await db.dailyWorkouts.delete(workout.id);
           } else {
-            await db.dailyWorkouts
-                .put(_workoutFrom(action.record, existing: workout));
+            final updated = _workoutFrom(action.record, existing: workout);
+            if (updated.date != workout.date &&
+                await db.dailyWorkouts
+                    .filter()
+                    .dateBetween(updated.date, _nextDay(updated.date),
+                        includeUpper: false)
+                    .isNotEmpty()) {
+              throw const FormatException(
+                  'There is already a workout on the new date.');
+            }
+            await db.dailyWorkouts.put(updated);
           }
         case 'run':
           if (action.operation == 'create') {
-            await db.runningLogs.put(_runFrom(action.record));
+            final draft = _runFrom(action.record);
+            if (await db.runningLogs
+                .filter()
+                .dateBetween(draft.date, _nextDay(draft.date),
+                    includeUpper: false)
+                .isNotEmpty()) {
+              throw const FormatException(
+                  'You already have a run on that date. Ask Steel to edit its mileage.');
+            }
+            await db.runningLogs.put(draft);
             return;
           }
           final run = await db.runningLogs.get(_requiredId(action));
@@ -491,7 +913,17 @@ class NeedleWorkoutService {
           if (action.operation == 'delete') {
             await db.runningLogs.delete(run.id);
           } else {
-            await db.runningLogs.put(_runFrom(action.record, existing: run));
+            final updated = _runFrom(action.record, existing: run);
+            if (updated.date != run.date &&
+                await db.runningLogs
+                    .filter()
+                    .dateBetween(updated.date, _nextDay(updated.date),
+                        includeUpper: false)
+                    .isNotEmpty()) {
+              throw const FormatException(
+                  'There is already a run on the new date.');
+            }
+            await db.runningLogs.put(updated);
           }
         default:
           throw StateError('Unsupported data type.');
@@ -548,17 +980,12 @@ class NeedleWorkoutService {
         final proposed = action.operation == 'delete'
             ? existing!
             : _workoutFrom(record, existing: existing);
-        final names = proposed.exercises
-            .map((item) => item.exerciseName)
-            .whereType<String>()
-            .join(', ');
+        final details = _workoutDetails(proposed);
         summary = switch (action.operation) {
-          'create' =>
-            'Create workout for ${_dateLabel(proposed.date)}: $names.',
+          'create' => 'Log ${_dateLabel(proposed.date)}: $details.',
           'update' =>
-            'Update workout from ${_dateLabel(existing!.date)} to ${_dateLabel(proposed.date)}: $names.',
-          _ =>
-            'Delete workout from ${_dateLabel(existing!.date)}. This removes its session history.',
+            'Update workout from ${_dateLabel(existing!.date)} to ${_dateLabel(proposed.date)}: $details.',
+          _ => 'Delete workout from ${_dateLabel(existing!.date)}: $details.',
         };
       case 'run':
         final existing = id == null ? null : await db.runningLogs.get(id);
@@ -593,48 +1020,8 @@ class NeedleWorkoutService {
   static String _dateLabel(DateTime date) =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
-  static NeedleDataAction _parseDataAction(String raw) {
-    final decoded = jsonDecode(raw);
-    if (decoded is! Map)
-      throw const FormatException('Needle3 returned an invalid action.');
-    final calls = decoded['function_calls'];
-    if (calls is! List)
-      throw const FormatException('Needle3 did not propose a data action.');
-    for (final call in calls) {
-      if (call is! Map || call['name'] != 'manage_data') continue;
-      final arguments = call['arguments'];
-      final parsed = arguments is String ? jsonDecode(arguments) : arguments;
-      if (parsed is! Map) break;
-      final operation = parsed['operation'];
-      final recordType = parsed['record_type'];
-      final summary = parsed['summary'];
-      if (!const ['create', 'read', 'update', 'delete'].contains(operation) ||
-          !const ['exercise', 'folder', 'workout', 'run']
-              .contains(recordType) ||
-          summary is! String ||
-          summary.trim().isEmpty ||
-          summary.length > 360 ||
-          summary.trim().split(RegExp(r'(?<=[.!?])\s+')).length > 3) {
-        break;
-      }
-      final idValue = parsed['record_id'];
-      final id = idValue is int && idValue > 0 ? idValue : null;
-      final record = parsed['record'];
-      if (record != null && record is! Map) break;
-      if (operation != 'create' && operation != 'read' && id == null) break;
-      if ((operation == 'create' || operation == 'update') && record == null)
-        break;
-      return NeedleDataAction(
-        operation: operation as String,
-        recordType: recordType as String,
-        recordId: id,
-        record: record == null ? const {} : Map<String, dynamic>.from(record),
-        summary: summary.trim(),
-      );
-    }
-    throw const FormatException(
-        'Needle3 could not form a safe data action. Try a more specific request.');
-  }
+  static DateTime _nextDay(DateTime date) =>
+      DateTime(date.year, date.month, date.day + 1);
 
   static int _requiredId(NeedleDataAction action) =>
       action.recordId ?? (throw const FormatException('Missing record ID.'));
@@ -645,8 +1032,11 @@ class NeedleWorkoutService {
     exercise.name = _recordString(record, 'name', fallback: existing?.name);
     exercise.targetMuscle = _recordString(record, 'target_muscle',
         fallback: existing?.targetMuscle);
-    exercise.targetMuscles = _stringList(record['target_muscles'],
-        existing?.targetMuscles ?? [exercise.targetMuscle]);
+    exercise.targetMuscles = _stringList(
+        record['target_muscles'],
+        record.containsKey('target_muscle')
+            ? [exercise.targetMuscle]
+            : existing?.targetMuscles ?? [exercise.targetMuscle]);
     exercise.secondaryMuscles = _stringList(
         record['secondary_muscles'], existing?.secondaryMuscles ?? const []);
     exercise.isFavorite = record['is_favorite'] is bool

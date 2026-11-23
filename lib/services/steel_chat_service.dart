@@ -132,6 +132,7 @@ class SteelChatService {
   static Future<SteelChatReply> ask(
     String question, {
     List<Map<String, String>> sessionHistory = const [],
+    void Function(int, int)? onProgress,
   }) async {
     final request = question.trim();
     if (request.isEmpty) {
@@ -141,6 +142,23 @@ class SteelChatService {
       throw const FormatException('Keep each message under 1,200 characters.');
     }
 
+    if (NeedleWorkoutService.dataRecordType(request) != null &&
+        (SteelGuardrails.requestedMutation(request) != null ||
+            NeedleWorkoutService.isDataRead(request))) {
+      final action = await NeedleWorkoutService.proposeDataAction(
+        request,
+        onProgress: onProgress,
+      );
+      return action.operation == 'read'
+          ? SteelChatReply(text: action.summary)
+          : SteelChatReply(
+              text: 'Review this change before applying it.',
+              action: action,
+            );
+    }
+
+    await NeedleWorkoutService.ensureReady(
+        onProgress: onProgress ?? (_, __) {});
     final db = await DatabaseService().database;
     final exercises = await db.exercises.where().sortByName().findAll();
     final documents = await _loadDocuments(db, exercises);
@@ -202,25 +220,6 @@ class SteelChatService {
               'I’ve prepared a draft for you to review. Nothing has been saved.',
           sources: retrieved.map((source) => source.label).toList(),
           draft: draft,
-        );
-      case 'manage_data':
-        final action =
-            await NeedleWorkoutService.validateProposedDataAction(raw);
-        if (action.operation == 'delete' &&
-            SteelGuardrails.isBulkDeleteRequest(request)) {
-          throw const FormatException(
-              'Steel can delete one item at a time. Please name one record.');
-        }
-        if (!SteelGuardrails.allowsOperation(request, action.operation)) {
-          throw const FormatException(
-              'I can only change app data when you clearly ask me to. Please say exactly what you want changed.');
-        }
-        return SteelChatReply(
-          text: action.operation == 'read'
-              ? action.summary
-              : 'Here’s my proposal. Nothing changes until you approve it.',
-          sources: retrieved.map((source) => source.label).toList(),
-          action: action,
         );
       case 'select_exercises':
         final names = arguments['exercise_names'];

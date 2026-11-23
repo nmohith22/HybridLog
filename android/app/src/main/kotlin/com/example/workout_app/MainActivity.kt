@@ -10,7 +10,7 @@ class MainActivity : FlutterActivity() {
     private val needleExecutor = Executors.newSingleThreadExecutor()
 
     private external fun nativeInitialize(modelPath: String): String
-    private external fun nativeComplete(input: String): String
+    private external fun nativeComplete(input: String, tools: String?): String
     private external fun nativeReset()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -29,9 +29,10 @@ class MainActivity : FlutterActivity() {
                     }
                     "complete" -> {
                         val input = call.argument<String>("input")
+                        val tools = call.argument<String>("tools")
                         if (input == null) result.error("invalid_input", "Missing request", null)
                         else needleExecutor.execute {
-                            val response = nativeComplete(input)
+                            val response = nativeComplete(input, tools)
                             runOnUiThread { result.success(response) }
                         }
                     }
